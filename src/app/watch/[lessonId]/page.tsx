@@ -43,7 +43,7 @@ export default async function WatchPage({ params }: { params: Promise<{ lessonId
         <div className="mx-auto max-w-7xl space-y-7 p-5 pt-20 sm:p-8 sm:pt-10 lg:p-12">
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="min-w-0 space-y-6">
-              <VideoPlayer video={lesson.video} />
+              <VideoPlayer video={lesson.video} lessonId={lesson.id} />
               <div><p className="text-sm font-medium text-muted-foreground">{course.title}</p><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{lesson.title}</h1><p className="mt-3 max-w-3xl leading-7 text-muted-foreground">A focused lesson from the {course.category} collection. This player is ready for a future video provider integration.</p></div>
               <LessonNavigation lesson={lesson} previousLesson={sequence[lessonIndex - 1]} nextLesson={sequence[lessonIndex + 1]} />
             </div>

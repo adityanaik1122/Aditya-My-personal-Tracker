@@ -8,6 +8,7 @@ import type { Course } from "@/data/courses"
 interface LessonProgress {
   completed: boolean
   positionSeconds: number
+  playlistIndex?: number
   updatedAt: string
 }
 
@@ -31,7 +32,7 @@ export async function readProgressStore(): Promise<ProgressStore> {
 
 export async function saveLessonProgress(
   lessonId: string,
-  progress: Pick<LessonProgress, "completed" | "positionSeconds">,
+  progress: Pick<LessonProgress, "completed" | "positionSeconds" | "playlistIndex">,
 ) {
   const store = await readProgressStore()
   store.lessons[lessonId] = {

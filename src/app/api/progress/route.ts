@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   const lessonId = typeof body?.lessonId === "string" ? body.lessonId : ""
   const completed = typeof body?.completed === "boolean" ? body.completed : undefined
   const positionSeconds = typeof body?.positionSeconds === "number" ? body.positionSeconds : 0
+  const playlistIndex = typeof body?.playlistIndex === "number" ? body.playlistIndex : undefined
 
   if (!lessonId || completed === undefined || !getLessonById(lessonId)) {
     return NextResponse.json({ error: "Invalid lesson progress payload." }, { status: 400 })
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
   const progress = await saveLessonProgress(lessonId, {
     completed,
     positionSeconds: Math.max(0, Math.floor(positionSeconds)),
+    ...(playlistIndex === undefined ? {} : { playlistIndex: Math.max(0, Math.floor(playlistIndex)) }),
   })
 
   return NextResponse.json(progress)

@@ -2,11 +2,91 @@
 
 import { ExternalLink, Maximize, Pause, Play, Volume2 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { VideoSource } from "@/data/courses"
 
-export default function VideoPlayer({ video }: { video: VideoSource }) {
+interface VideoPlayerProps {
+  video: VideoSource
+  lessonId?: string
+}
+
+interface YouTubePlayer {
+  getPlaylistIndex: () => number
+  loadPlaylist: (options: { listType: string; list: string; index: number }) => void
+  destroy: () => void
+}
+
+interface YouTubeApi {
+  Player: new (element: HTMLElement, options: { events: { onReady: () => void; onStateChange: () => void } }) => YouTubePlayer
+  PlayerState: { PLAYING: number }
+}
+
+declare global {
+  interface Window {
+    YT?: YouTubeApi
+    onYouTubeIframeAPIReady?: () => void
+  }
+}
+
+function loadYouTubeApi() {
+  if (window.YT) return Promise.resolve(window.YT)
+  return new Promise<YouTubeApi>((resolve) => {
+    const previousCallback = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      previousCallback?.()
+      if (window.YT) resolve(window.YT)
+    }
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const script = document.createElement("script")
+      script.src = "https://www.youtube.com/iframe_api"
+      document.head.appendChild(script)
+    }
+  })
+}
+
+function PlaylistPlayer({ playlistId, lessonId }: { playlistId: string; lessonId?: string }) {
+  const playerElement = useRef<HTMLDivElement>(null)
+  const player = useRef<YouTubePlayer | null>(null)
+  const [savedIndex, setSavedIndex] = useState(0)
+
+  useEffect(() => {
+    if (!lessonId) return
+    const localIndex = Number.parseInt(window.localStorage.getItem(`playlist:${lessonId}`) ?? "0", 10)
+    Promise.resolve().then(() => setSavedIndex(Number.isNaN(localIndex) ? 0 : localIndex))
+    fetch("/api/progress").then((response) => response.json()).then((store: { lessons?: Record<string, { playlistIndex?: number }> }) => {
+      const index = store.lessons?.[lessonId]?.playlistIndex
+      if (typeof index === "number") setSavedIndex(index)
+    }).catch(() => undefined)
+  }, [lessonId])
+
+  useEffect(() => {
+    let disposed = false
+    loadYouTubeApi().then((youtube) => {
+      if (disposed || !playerElement.current) return
+      player.current = new youtube.Player(playerElement.current, {
+        events: {
+          onReady: () => player.current?.loadPlaylist({ listType: "playlist", list: playlistId, index: savedIndex }),
+          onStateChange: () => {
+            const index = player.current?.getPlaylistIndex()
+            if (lessonId && typeof index === "number" && index >= 0) {
+              window.localStorage.setItem(`playlist:${lessonId}`, String(index))
+              fetch("/api/progress", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lessonId, completed: false, positionSeconds: 0, playlistIndex: index }) }).catch(() => undefined)
+            }
+          },
+        },
+      })
+    })
+    return () => {
+      disposed = true
+      player.current?.destroy()
+    }
+  }, [lessonId, playlistId, savedIndex])
+
+  return <div className="overflow-hidden rounded-xl border bg-black shadow-sm"><div ref={playerElement} className="aspect-video w-full" /><p className="bg-background px-4 py-2 text-xs text-muted-foreground">Choose any video from the playlist. Your last playlist position is remembered automatically.</p></div>
+}
+
+export default function VideoPlayer({ video, lessonId }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
 
   if (video.provider === "google-drive" && video.url?.includes("/folders/")) {
@@ -28,7 +108,7 @@ export default function VideoPlayer({ video }: { video: VideoSource }) {
   }
 
   if (video.provider === "youtube" && video.playlistId) {
-    return <iframe title="YouTube course playlist" src={`https://www.youtube-nocookie.com/embed/videoseries?list=${video.playlistId}`} className="aspect-video w-full rounded-xl border bg-black shadow-sm" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+    return <PlaylistPlayer playlistId={video.playlistId} lessonId={lessonId} />
   }
 
   return (
