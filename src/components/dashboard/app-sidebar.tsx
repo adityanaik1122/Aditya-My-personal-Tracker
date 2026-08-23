@@ -132,6 +132,10 @@ export default function AppSidebar() {
   useEffect(() => {
     const navigationEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
     if (navigationEntry?.type !== "reload") return
+    if (window.sessionStorage.getItem("learning_hub_just_logged_in") === "true") {
+      window.sessionStorage.removeItem("learning_hub_just_logged_in")
+      return
+    }
 
     fetch("/api/auth/logout", { method: "POST" }).finally(() => router.replace("/login"))
   }, [router])

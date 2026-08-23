@@ -29,6 +29,7 @@ export default function LoginPage() {
       }
 
       const nextPath = new URLSearchParams(window.location.search).get("next")
+      window.sessionStorage.setItem("learning_hub_just_logged_in", "true")
       router.replace(nextPath?.startsWith("/") ? nextPath : "/")
       router.refresh()
     } catch {
