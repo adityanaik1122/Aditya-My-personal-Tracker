@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 const sessionCookieName = "learning_hub_session"
 
-const publicPaths = ["/login", "/api/auth/login"]
+const publicPaths = ["/login", "/api/auth/login", "/api/auth/logout"]
 
 async function isValidSession(token: string | undefined) {
   const secret = process.env.LEARNING_HUB_SESSION_SECRET

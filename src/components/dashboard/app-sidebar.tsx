@@ -6,12 +6,14 @@ import {
   Bookmark,
   CirclePlay,
   LayoutDashboard,
+  LogOut,
   Menu,
   X,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -41,7 +43,7 @@ function isActivePath(pathname: string, href: string) {
   return href === "/" ? pathname === href : pathname.startsWith(href)
 }
 
-function SidebarContent({ pathname }: { pathname: string }) {
+function SidebarContent({ pathname, onLogout }: { pathname: string; onLogout: () => void }) {
   return (
     <div className="flex h-full flex-col px-4 py-5">
       <Link
@@ -104,6 +106,14 @@ function SidebarContent({ pathname }: { pathname: string }) {
           <BarChart3 className="size-4" aria-hidden="true" />
           Progress
         </Link>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LogOut className="size-4" aria-hidden="true" />
+          Log out
+        </button>
       </div>
     </div>
   )
@@ -111,7 +121,20 @@ function SidebarContent({ pathname }: { pathname: string }) {
 
 export default function AppSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" })
+    router.replace("/login")
+  }
+
+  useEffect(() => {
+    const navigationEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
+    if (navigationEntry?.type !== "reload") return
+
+    fetch("/api/auth/logout", { method: "POST" }).finally(() => router.replace("/login"))
+  }, [router])
 
   return (
     <>
@@ -126,7 +149,7 @@ export default function AppSidebar() {
       </button>
 
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-background md:block">
-        <SidebarContent pathname={pathname} />
+        <SidebarContent pathname={pathname} onLogout={handleLogout} />
       </aside>
 
       {isMobileOpen && (
@@ -146,7 +169,7 @@ export default function AppSidebar() {
             >
               <X className="size-5" aria-hidden="true" />
             </button>
-            <SidebarContent pathname={pathname} />
+            <SidebarContent pathname={pathname} onLogout={handleLogout} />
           </aside>
         </div>
       )}
