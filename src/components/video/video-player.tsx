@@ -1,6 +1,7 @@
 "use client"
 
 import { ExternalLink, Maximize, Pause, Play, Volume2 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -14,6 +15,7 @@ interface VideoPlayerProps {
 interface YouTubePlayer {
   getPlaylistIndex: () => number
   loadPlaylist: (options: { listType: string; list: string; index: number }) => void
+  loadVideoById: (options: { videoId: string }) => void
   destroy: () => void
 }
 
@@ -49,6 +51,8 @@ function PlaylistPlayer({ playlistId, lessonId }: { playlistId: string; lessonId
   const playerElement = useRef<HTMLDivElement>(null)
   const player = useRef<YouTubePlayer | null>(null)
   const [savedIndex, setSavedIndex] = useState(0)
+  const [playlistItems, setPlaylistItems] = useState<Array<{ videoId: string; title: string; thumbnail?: string; position: number }>>([])
+  const [activeIndex, setActiveIndex] = useState(0)
 
   useEffect(() => {
     if (!lessonId) return
@@ -61,6 +65,13 @@ function PlaylistPlayer({ playlistId, lessonId }: { playlistId: string; lessonId
   }, [lessonId])
 
   useEffect(() => {
+    fetch(`/api/youtube/playlist?playlistId=${encodeURIComponent(playlistId)}`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Playlist request failed")))
+      .then((data: { items?: Array<{ videoId: string; title: string; thumbnail?: string; position: number }> }) => setPlaylistItems(data.items ?? []))
+      .catch(() => setPlaylistItems([]))
+  }, [playlistId])
+
+  useEffect(() => {
     let disposed = false
     loadYouTubeApi().then((youtube) => {
       if (disposed || !playerElement.current) return
@@ -70,6 +81,7 @@ function PlaylistPlayer({ playlistId, lessonId }: { playlistId: string; lessonId
           onStateChange: () => {
             const index = player.current?.getPlaylistIndex()
             if (lessonId && typeof index === "number" && index >= 0) {
+              setActiveIndex(index)
               window.localStorage.setItem(`playlist:${lessonId}`, String(index))
               fetch("/api/progress", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lessonId, completed: false, positionSeconds: 0, playlistIndex: index }) }).catch(() => undefined)
             }
@@ -83,7 +95,15 @@ function PlaylistPlayer({ playlistId, lessonId }: { playlistId: string; lessonId
     }
   }, [lessonId, playlistId, savedIndex])
 
-  return <div className="overflow-hidden rounded-xl border bg-black shadow-sm"><div ref={playerElement} className="aspect-video w-full" /><p className="bg-background px-4 py-2 text-xs text-muted-foreground">Choose any video from the playlist. Your last playlist position is remembered automatically.</p></div>
+  return (
+    <div className="overflow-hidden rounded-xl border bg-black shadow-sm">
+      <div ref={playerElement} className="aspect-video w-full" />
+      <div className="bg-background">
+        <div className="border-b px-4 py-3"><p className="text-sm font-medium">Playlist videos</p><p className="mt-1 text-xs text-muted-foreground">{playlistItems.length > 0 ? `${playlistItems.length} videos` : "Loading playlist videos..."}</p></div>
+        {playlistItems.length > 0 && <ol className="max-h-72 overflow-y-auto p-2">{playlistItems.map((item, index) => <li key={item.videoId}><button type="button" onClick={() => { player.current?.loadVideoById({ videoId: item.videoId }); setActiveIndex(index) }} className={`flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${index === activeIndex ? "bg-muted" : ""}`}><span className="w-6 shrink-0 text-center text-xs text-muted-foreground">{index + 1}</span>{item.thumbnail ? <Image src={item.thumbnail} alt="" width={64} height={40} className="h-10 w-16 shrink-0 rounded object-cover" /> : <span className="h-10 w-16 shrink-0 rounded bg-muted" />}<span className="min-w-0 flex-1 truncate text-sm">{item.title}</span></button></li>)}</ol>}
+      </div>
+    </div>
+  )
 }
 
 export default function VideoPlayer({ video, lessonId }: VideoPlayerProps) {
