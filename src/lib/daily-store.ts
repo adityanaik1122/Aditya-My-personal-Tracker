@@ -1,7 +1,7 @@
 import "server-only"
 import { randomUUID } from "node:crypto"
 import { courses } from "@/data/courses"
-import { updateStore } from "./file-store"
+import { updateStore } from "./store"
 import {
   addDays,
   changeOccurrence,

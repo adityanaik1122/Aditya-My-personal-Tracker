@@ -1,7 +1,7 @@
 import "server-only"
 
 import { connection } from "next/server"
-import { readStore, updateStore, type LessonProgress } from "./file-store"
+import { readStore, updateStore, type LessonProgress } from "./store"
 import { requireSession } from "./session"
 
 import type { Course } from "@/data/courses"
@@ -11,7 +11,7 @@ export interface ProgressStore {
 }
 
 export async function readProgressStore(): Promise<ProgressStore> {
-  // Progress changes on disk between requests and must never be baked into prerendered pages.
+  // Mutable progress must never be baked into prerendered pages.
   await connection()
   await requireSession()
   return { lessons: (await readStore()).lessons }
