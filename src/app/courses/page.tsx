@@ -1,9 +1,6 @@
-import { Filter } from "lucide-react"
-
-import AppSidebar from "@/components/dashboard/app-sidebar"
+import DailyShell from "@/components/daily/daily-shell"
 import CourseGrid from "@/components/dashboard/course-grid"
-import DashboardHeader from "@/components/dashboard/dashboard-header"
-import { courses, mainCategories } from "@/data/courses"
+import { courses } from "@/data/courses"
 import { applyProgress, readProgressStore } from "@/lib/progress-store"
 
 export default async function CoursesPage({
@@ -19,25 +16,28 @@ export default async function CoursesPage({
   const filteredCourses = category
     ? userCourses.filter((course) => course.category.toLowerCase().replaceAll(" ", "-") === category)
     : userCourses
-  const activeCategory = mainCategories.find((item) => item.toLowerCase().replaceAll(" ", "-") === category)
+  const categories = [...new Set(courses.map(course => course.category))].sort()
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppSidebar />
-      <main className="min-h-screen md:pl-64">
-        <DashboardHeader />
-        <div className="mx-auto max-w-7xl space-y-8 p-5 pt-20 sm:p-8 sm:pt-10 lg:p-12">
+    <DailyShell current="/courses">
+        <div className="space-y-8">
           <section>
             <p className="text-sm font-medium text-muted-foreground">Your personal library</p>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">My courses</h1>
-              <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm text-muted-foreground"><Filter className="size-4" aria-hidden="true" />{activeCategory ?? "All categories"}</div>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Course library</h1>
+              <form action="/courses" className="flex max-w-full flex-wrap items-center gap-2">
+                <label htmlFor="category" className="sr-only">Course category</label>
+                <select key={category || "all"} id="category" name="category" defaultValue={category || ""} className="min-h-11 max-w-full rounded-xl border bg-white px-3 text-sm">
+                  <option value="">All categories</option>
+                  {categories.map(item => <option key={item} value={item.toLowerCase().replaceAll(" ", "-")}>{item}</option>)}
+                </select>
+                <button className="min-h-11 rounded-xl bg-emerald-900 px-4 text-sm font-medium text-white">Filter</button>
+              </form>
             </div>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">Browse everything in your Aditya | My personal Tracker collection.</p>
           </section>
-          {filteredCourses.length > 0 ? <CourseGrid courses={filteredCourses} /> : <div className="rounded-xl border border-dashed bg-background p-10 text-center"><h2 className="font-semibold">No courses in this category yet</h2><p className="mt-2 text-sm text-muted-foreground">Try another category or browse your full library.</p></div>}
+          {filteredCourses.length > 0 ? <CourseGrid courses={filteredCourses} showViewAll={false} /> : <div className="rounded-xl border border-dashed bg-background p-10 text-center"><h2 className="font-semibold">No courses in this category yet</h2><p className="mt-2 text-sm text-muted-foreground">Try another category or browse your full library.</p></div>}
         </div>
-      </main>
-    </div>
+    </DailyShell>
   )
 }

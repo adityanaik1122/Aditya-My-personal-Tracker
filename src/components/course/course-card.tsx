@@ -14,7 +14,7 @@ export default function CourseCard({ course }: { course: Course }) {
   const colorIndex = course.id.length % thumbnailStyles.length
 
   return (
-    <article className="group overflow-hidden rounded-xl border bg-background transition-shadow hover:shadow-md">
+    <article className="group overflow-hidden rounded-2xl border bg-white transition-shadow hover:shadow-md">
       <Link href={`/courses/${course.id}`} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
         <div className={`relative flex aspect-[16/9] items-end overflow-hidden bg-gradient-to-br ${thumbnailStyles[colorIndex]} p-5 text-white`}>
           <span className="absolute right-4 top-4 rounded-full bg-black/20 px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm">
@@ -38,7 +38,7 @@ export default function CourseCard({ course }: { course: Course }) {
           <span>{course.progress}% complete</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-label={`${course.progress}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={course.progress}>
-          <div className="h-full rounded-full bg-foreground transition-all" style={{ width: `${course.progress}%` }} />
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${course.progress}%` }} />
         </div>
       </div>
     </article>

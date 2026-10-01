@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 
-import AppSidebar from "@/components/dashboard/app-sidebar"
-import DashboardHeader from "@/components/dashboard/dashboard-header"
+import DailyShell from "@/components/daily/daily-shell"
 import CourseHeader from "@/components/course/course-header"
 import CourseProgress from "@/components/course/course-progress"
 import LessonList from "@/components/course/lesson-list"
@@ -26,16 +25,12 @@ export default async function CourseDetailsPage({
   const course = applyProgress(courseRecord, await readProgressStore())
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppSidebar />
-      <main className="min-h-screen md:pl-64">
-        <DashboardHeader />
-        <div className="mx-auto max-w-7xl space-y-10 p-5 pt-20 sm:p-8 sm:pt-10 lg:p-12">
+    <DailyShell current="/courses">
+        <div className="space-y-10">
           <CourseHeader course={course} />
           <CourseProgress course={course} />
           <LessonList course={course} />
         </div>
-      </main>
-    </div>
+    </DailyShell>
   )
 }

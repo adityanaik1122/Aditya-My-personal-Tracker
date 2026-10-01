@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation"
 
-import AppSidebar from "@/components/dashboard/app-sidebar"
-import DashboardHeader from "@/components/dashboard/dashboard-header"
+import DailyShell from "@/components/daily/daily-shell"
 import LessonNavigation from "@/components/video/lesson-navigation"
 import LessonSidebar from "@/components/video/lesson-sidebar"
 import VideoPlayer from "@/components/video/video-player"
@@ -36,11 +35,8 @@ export default async function WatchPage({ params }: { params: Promise<{ lessonId
   const lessonIndex = sequence.findIndex((item) => item.id === lesson.id)
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppSidebar />
-      <main className="min-h-screen md:pl-64">
-        <DashboardHeader />
-        <div className="mx-auto max-w-7xl space-y-7 p-5 pt-20 sm:p-8 sm:pt-10 lg:p-12">
+    <DailyShell current="/courses">
+        <div className="space-y-7">
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="min-w-0 space-y-6">
               <VideoPlayer video={lesson.video} lessonId={lesson.id} />
@@ -50,7 +46,6 @@ export default async function WatchPage({ params }: { params: Promise<{ lessonId
             <LessonSidebar course={course} currentLesson={lesson} />
           </div>
         </div>
-      </main>
-    </div>
+    </DailyShell>
   )
 }

@@ -1,5 +1,4 @@
-import AppSidebar from "@/components/dashboard/app-sidebar"
-import DashboardHeader from "@/components/dashboard/dashboard-header"
+import DailyShell from "@/components/daily/daily-shell"
 import ContinueWatching from "@/components/dashboard/continue-watching"
 import CourseGrid from "@/components/dashboard/course-grid"
 import StatsCards from "@/components/dashboard/stats-cards"
@@ -12,19 +11,13 @@ export default async function Home() {
   const userCourses = courses.map((course) => applyProgress(course, store))
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppSidebar />
-
-      <main className="min-h-screen md:pl-64">
-        <DashboardHeader />
-
-        <div className="mx-auto max-w-7xl space-y-10 p-5 pt-20 sm:p-8 sm:pt-10 lg:p-12">
+    <DailyShell current="/">
+        <div className="space-y-10">
           <WelcomeSection />
           <StatsCards courses={userCourses} />
           <ContinueWatching courses={userCourses} />
           <CourseGrid courses={userCourses} />
         </div>
-      </main>
-    </div>
+    </DailyShell>
   )
 }
