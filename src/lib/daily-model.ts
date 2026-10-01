@@ -1,9 +1,10 @@
 // Pure calendar/domain logic: no browser, Next.js, storage or AI dependency.
 export const categories = [
-  "Work",
-  "Learning",
-  "Inspiration",
-  "Personal",
+  "Morning Routine",
+  "Mental and physical Health",
+  "IT Study",
+  "Design Study",
+  "Hobbies",
 ] as const
 export type Category = (typeof categories)[number]
 export type Recurrence = "daily" | "weekdays" | "weekly" | "once"
@@ -301,16 +302,16 @@ export function validateTask(value: unknown): TaskSpec {
 export function newDailyStore(now = new Date()): DailyStore {
   const today = localDate(now, "Asia/Kolkata")
   const examples: Array<Partial<TaskSpec> & { title: string }> = [
-    { title: "Personal inbox", category: "Work" },
-    { title: "Work inbox", category: "Work" },
-    { title: "Other inbox", category: "Work" },
+    { title: "Personal inbox", category: "Morning Routine" },
+    { title: "Work inbox", category: "IT Study" },
+    { title: "Other inbox", category: "Mental and physical Health" },
     {
       title: "Five minutes of inspiration",
-      category: "Inspiration",
+      category: "Hobbies",
       url: "https://www.awwwards.com/",
     },
-    { title: "Practise Italian", category: "Learning", minutes: 15 },
-    { title: "Practise piano", minutes: 15 },
+    { title: "Practise Italian", category: "Hobbies", minutes: 15 },
+    { title: "Practise piano", category: "Hobbies", minutes: 15 },
   ]
   return {
     version: 1,
@@ -321,7 +322,7 @@ export function newDailyStore(now = new Date()): DailyStore {
     },
     tasks: examples.map((example, i) => {
       const spec: TaskSpec = {
-        category: "Personal",
+        category: "Morning Routine",
         url: "",
         notes: "Editable example — add your link and unpause when ready.",
         minutes: 5,

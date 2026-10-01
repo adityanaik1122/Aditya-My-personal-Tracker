@@ -23,6 +23,23 @@ export function dailyTransaction<T>(
     store.daily ??= newDailyStore(now)
     const daily = store.daily
     daily.taskOrder ??= daily.tasks.map((task) => task.id)
+    const legacyCategories: Record<string, "Morning Routine" | "Mental and physical Health" | "IT Study" | "Design Study" | "Hobbies"> = {
+      Work: "IT Study",
+      Learning: "IT Study",
+      Inspiration: "Hobbies",
+      Personal: "Mental and physical Health",
+    }
+    for (const task of daily.tasks) {
+      const mapped = legacyCategories[String(task.category)]
+      if (mapped) {
+        task.category = mapped
+        for (const version of task.versions) version.spec.category = mapped
+      }
+    }
+    for (const occurrence of Object.values(daily.occurrences)) {
+      const mapped = legacyCategories[String(occurrence.task.category)]
+      if (mapped) occurrence.task.category = mapped
+    }
     const today = localDate(now, daily.settings.timeZone)
     materialize(daily, today)
     return fn(daily, today)
