@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Plus, CalendarDays, Pause, Play, ArrowRight, GripVertical } from "lucide-react"
 import {
   summary,
+  categories,
   type Task,
   type TaskSpec,
 } from "@/lib/daily-model"
@@ -31,7 +32,7 @@ function dateLabel(date: string) {
 function blank(today: string): TaskSpec {
   return {
     title: "",
-    category: "Personal",
+    category: "Morning Routine",
     url: "",
     notes: "",
     minutes: 10,
@@ -307,24 +308,20 @@ export default function DailyClient({
                   </button>
                 </div>
                 {group.length === 0 && <p className="rounded-2xl border border-dashed p-6 text-sm text-zinc-500">{isRoutine ? "No routines scheduled for this date." : "No one-off tasks scheduled for this date."}</p>}
-                <div className="space-y-3">
-                  {[...group]
-                    .sort(
-                      (a, b) =>
-                        Number(a.status !== "pending") -
-                          Number(b.status !== "pending") ||
-                        Number(b.task.priority === "high") -
-                          Number(a.task.priority === "high"),
-                    )
-                    .map((row) => (
-                      <OccurrenceCard
-                        key={row.id}
-                        row={row}
-                        today={data.today}
-                        busy={locked}
-                        save={save}
-                      />
-                    ))}
+                <div className="space-y-6">
+                  {categories.map((category) => {
+                    const categoryRows = group.filter((row) => row.task.category === category)
+                    if (!categoryRows.length) return null
+                    return <div key={category} className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm">
+                      <div className="flex items-center justify-between border-b border-emerald-900/10 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-800"><span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />{category}</h3>
+                        <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-emerald-800">{categoryRows.length} {categoryRows.length === 1 ? "task" : "tasks"}</span>
+                      </div>
+                      <div className="space-y-3 p-3 sm:p-4">
+                        {[...categoryRows].sort((a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || Number(b.task.priority === "high") - Number(a.task.priority === "high")).map((row) => <OccurrenceCard key={row.id} row={row} today={data.today} busy={locked} save={save} />)}
+                      </div>
+                    </div>
+                  })}
                 </div>
               </section>
             )
@@ -369,7 +366,11 @@ export default function DailyClient({
             history.
           </div>
           {!orderedTasks.some(t => (t.recurrence === "once") === (taskKind === "once")) && <Empty title={taskKind === "once" ? "No one-off tasks yet" : "No routines yet"} text={taskKind === "once" ? "Use Add task for something you only need to do once." : "Use Add routine for an activity that repeats."} />}
-          {orderedTasks.filter(t => (t.recurrence === "once") === (taskKind === "once")).map((task) => {
+          {categories.map((category) => {
+            const categoryTasks = orderedTasks.filter(t => (t.recurrence === "once") === (taskKind === "once") && t.category === category)
+            if (!categoryTasks.length) return null
+            return <section key={category} className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-emerald-900/10 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3"><h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-800"><span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />{category}</h2><span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-emerald-800">{categoryTasks.length} {categoryTasks.length === 1 ? "task" : "tasks"}</span></div><div className="space-y-3 p-3 sm:p-4">
+            {categoryTasks.map((task) => {
             return (
             <article
               key={task.id}
@@ -435,6 +436,7 @@ export default function DailyClient({
               </div>
             </article>
             )
+          })}</div></section>
           })}
         </div>
       )}
@@ -448,7 +450,7 @@ export default function DailyClient({
             setEditor({
               ...blank(data.today),
               title: `Study ${catalog.find((c) => c.id === id)?.title}`,
-              category: "Learning",
+              category: "IT Study",
               courseId: id,
               minutes: 25,
             })
