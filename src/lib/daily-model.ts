@@ -26,6 +26,16 @@ export interface Task extends TaskSpec {
   createdDate: string
   versions: Array<{ from: string; spec: TaskSpec }>
 }
+export interface Resource {
+  id: string
+  country: string
+  title: string
+  url: string
+  type: "Jobs" | "Government" | "Housing" | "Video" | "Other"
+  status: "To review" | "Saved" | "Reviewed"
+  notes: string
+  createdAt: string
+}
 export interface Occurrence {
   id: string
   taskId: string
@@ -62,6 +72,7 @@ export interface DailyStore {
   }
   tasks: Task[]
   taskOrder?: string[]
+  resources?: Resource[]
   occurrences: Record<string, Occurrence>
   through: string
   coursePlans: Record<string, CoursePlan>
@@ -331,6 +342,7 @@ export function newDailyStore(now = new Date()): DailyStore {
       }
     }),
     taskOrder: examples.map((_, i) => `example-${i}`),
+    resources: [],
     occurrences: {},
     through: addDays(today, -1),
     coursePlans: {},

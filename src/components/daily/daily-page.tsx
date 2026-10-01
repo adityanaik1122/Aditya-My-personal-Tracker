@@ -7,7 +7,7 @@ import DailyClient from "./daily-client"
 export default async function DailyPage({
   view,
 }: {
-  view: "today" | "tasks" | "study" | "insights" | "settings"
+  view: "today" | "tasks" | "study" | "insights" | "settings" | "resources"
 }) {
   await requireSession()
   const initial = await dailyTransaction(dailyView)

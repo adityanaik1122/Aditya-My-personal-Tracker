@@ -7,12 +7,14 @@ import {
   ChartNoAxesCombined,
   Bell,
   Library,
+  Globe2,
 } from "lucide-react"
 import type { ReactNode } from "react"
 
 const navigation = [
   { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/tasks", label: "Tasks & routines", icon: ListChecks },
+  { href: "/resources", label: "Country resources", icon: Globe2 },
   { href: "/study", label: "Study plan", icon: BookOpen },
   { href: "/insights", label: "Consistency", icon: ChartNoAxesCombined },
   { href: "/settings", label: "Reminders", icon: Bell },
