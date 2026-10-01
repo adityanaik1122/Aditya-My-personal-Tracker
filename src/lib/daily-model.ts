@@ -6,7 +6,7 @@ export const categories = [
   "Design Study",
   "Hobbies",
 ] as const
-export type Category = (typeof categories)[number]
+export type Category = (typeof categories)[number] | "Work" | "Learning" | "Inspiration" | "Personal"
 export type Recurrence = "daily" | "weekdays" | "weekly" | "once"
 export interface TaskSpec {
   title: string
@@ -261,7 +261,8 @@ export function validateTask(value: unknown): TaskSpec {
       "Use a title (up to 120 characters) and a valid http(s) or local link.",
     )
   if (
-    !categories.includes(x.category) ||
+    !categories.includes(x.category as (typeof categories)[number]) &&
+    !["Work", "Learning", "Inspiration", "Personal"].includes(x.category) ||
     !["daily", "weekdays", "weekly", "once"].includes(x.recurrence) ||
     !["low", "normal", "high"].includes(x.priority)
   )
