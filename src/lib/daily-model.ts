@@ -61,6 +61,7 @@ export interface DailyStore {
     remindersEnabled: boolean
   }
   tasks: Task[]
+  taskOrder?: string[]
   occurrences: Record<string, Occurrence>
   through: string
   coursePlans: Record<string, CoursePlan>
@@ -329,6 +330,7 @@ export function newDailyStore(now = new Date()): DailyStore {
         versions: [{ from: today, spec }],
       }
     }),
+    taskOrder: examples.map((_, i) => `example-${i}`),
     occurrences: {},
     through: addDays(today, -1),
     coursePlans: {},
