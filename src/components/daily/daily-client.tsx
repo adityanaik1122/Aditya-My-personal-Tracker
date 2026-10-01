@@ -1,9 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import { Plus, CalendarDays, Pause, Play, ArrowRight } from "lucide-react"
 import {
-  categories,
   summary,
   type Task,
   type TaskSpec,
@@ -61,6 +59,7 @@ export default function DailyClient({
   const [offline, setOffline] = useState(false)
   const [date, setDate] = useState(initial.today)
   const [editor, setEditor] = useState<TaskSpec | Task | null>(null)
+  const [taskKind, setTaskKind] = useState<"routines" | "once">("routines")
   const saving = useRef(false)
   const revision = useRef(0)
   const currentToday = useRef(initial.today)
@@ -143,8 +142,8 @@ export default function DailyClient({
       "Make room for what matters. One task at a time.",
     ],
     tasks: [
-      "Your routines",
-      "A small, intentional plan. Adjust it as life changes.",
+      "Tasks & routines",
+      "Build repeatable routines and keep one-off tasks separate.",
     ],
     study: [
       "Keep your place",
@@ -173,19 +172,19 @@ export default function DailyClient({
             {titles[view][1]}
           </p>
         </div>
-        {["today", "tasks"].includes(view) && (
+        {view === "tasks" && (
           <button
             className={primary}
             disabled={locked}
             onClick={() =>
               setEditor({
                 ...blank(data.today),
-                recurrence: view === "today" ? "once" : "daily",
+                recurrence: taskKind === "once" ? "once" : "daily",
               })
             }
           >
             <Plus size={17} />
-            {view === "today" ? "Add for today" : "New routine"}
+            {taskKind === "once" ? "Add task" : "Add routine"}
           </button>
         )}
       </div>
@@ -282,23 +281,23 @@ export default function DailyClient({
               </p>
             </div>
           </section>
-          {rows.length === 0 && (
-            <Empty
-              title="A little breathing room"
-              text="Nothing scheduled for this date. Add a task for today or unpause an example in Routines."
-            />
-          )}
-          {categories.map((category) => {
-            const group = rows.filter((r) => r.task.category === category)
-            if (!group.length) return null
+          {(["routines", "once"] as const).map((kind) => {
+            const group = rows.filter((r) => (r.task.recurrence === "once") === (kind === "once"))
+            const groupStats = summary(group)
+            const isRoutine = kind === "routines"
             return (
-              <section key={category}>
-                <div className="mb-3 flex items-center gap-3">
-                  <h2 className="font-semibold">{category}</h2>
-                  <span className="rounded-full bg-zinc-200/60 px-2.5 py-0.5 text-xs text-zinc-500">
-                    {group.length}
-                  </span>
+              <section key={kind} aria-labelledby={`${kind}-heading`}>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 id={`${kind}-heading`} className="text-lg font-semibold">{isRoutine ? "Daily routines" : "One-off tasks"}</h2>
+                    <p className="mt-1 text-sm text-zinc-500">{isRoutine ? "Repeating activities scheduled for this date. They return on their next scheduled day." : "Do these once. Completed tasks stay done."}</p>
+                    <p className="mt-2 text-sm font-medium text-emerald-800">{groupStats.completed} of {groupStats.total} completed</p>
+                  </div>
+                  <button className={button} disabled={locked} onClick={() => setEditor({ ...blank(data.today), recurrence: isRoutine ? "daily" : "once" })}>
+                    <Plus size={16} />{isRoutine ? "Add routine" : "Add task"}
+                  </button>
                 </div>
+                {group.length === 0 && <p className="rounded-2xl border border-dashed p-6 text-sm text-zinc-500">{isRoutine ? "No routines scheduled for this date." : "No one-off tasks scheduled for this date."}</p>}
                 <div className="space-y-3">
                   {[...group]
                     .sort(
@@ -346,13 +345,22 @@ export default function DailyClient({
       )}
       {view === "tasks" && (
         <div className="space-y-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Task type">
+            {(["routines", "once"] as const).map(kind => (
+              <button key={kind} type="button" aria-pressed={taskKind === kind} className={taskKind === kind ? primary : button} onClick={() => setTaskKind(kind)}>
+                {kind === "routines" ? "Routines" : "One-off tasks"}
+                <span className="ml-2">{data.tasks.filter(t => (t.recurrence === "once") === (kind === "once")).length}</span>
+              </button>
+            ))}
+          </div>
           <div className="rounded-xl border border-emerald-900/10 bg-emerald-50/40 p-4 text-sm leading-6 text-zinc-600">
             Examples start paused. Add friendly inbox labels and links only — no
             email passwords. Changes affect today’s untouched tasks and future
             schedules; completed, skipped, and moved occurrences keep their
             history.
           </div>
-          {data.tasks.map((task) => (
+          {!data.tasks.some(t => (t.recurrence === "once") === (taskKind === "once")) && <Empty title={taskKind === "once" ? "No one-off tasks yet" : "No routines yet"} text={taskKind === "once" ? "Use Add task for something you only need to do once." : "Use Add routine for an activity that repeats."} />}
+          {data.tasks.filter(t => (t.recurrence === "once") === (taskKind === "once")).map((task) => (
             <article
               key={task.id}
               className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5"
@@ -363,7 +371,10 @@ export default function DailyClient({
                 </p>
                 <h2 className="mt-1 font-semibold">{task.title}</h2>
                 <p className="mt-2 text-xs text-zinc-500">
-                  {task.paused ? "Paused" : "Scheduled"}
+                  {task.recurrence === "once" ? (() => {
+                    const occurrence = data.occurrences.find(r => r.taskId === task.id)
+                    return occurrence?.status === "completed" ? "Completed" : occurrence?.status === "skipped" ? "Skipped" : task.paused ? "Paused" : `Scheduled for ${occurrence?.date || task.startDate}`
+                  })() : task.paused ? "Paused" : "Scheduled"}
                   {task.endDate ? ` · Ends ${task.endDate}` : ""}
                 </p>
               </div>
@@ -427,12 +438,6 @@ function Empty({ title, text }: { title: string; text: string }) {
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
         {text}
       </p>
-      <Link
-        className="mt-4 inline-block text-sm font-medium text-emerald-800 underline underline-offset-4"
-        href="/tasks"
-      >
-        Manage routines
-      </Link>
     </div>
   )
 }

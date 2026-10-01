@@ -35,7 +35,7 @@ export default function TaskEditor({
     >
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          {"id" in initial ? "Edit routine" : "Make a little plan"}
+          {"id" in initial ? "Edit" : "Add"} {task.recurrence === "once" ? "one-off task" : "routine"}
         </h2>
         <button type="button" className={button} onClick={close}>
           Cancel
@@ -232,7 +232,7 @@ export default function TaskEditor({
             checked={task.paused}
             onChange={(e) => set("paused", e.target.checked)}
           />
-          Pause this routine
+          Pause this {task.recurrence === "once" ? "task" : "routine"}
         </label>
         <button disabled={busy} className={primary}>
           <Check size={16} />
