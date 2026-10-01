@@ -19,6 +19,7 @@ import TaskEditor from "./task-editor"
 import OccurrenceCard from "./occurrence-card"
 import Study from "./study"
 import Insights from "./insights"
+import Resources from "./resources"
 function dateLabel(date: string) {
   return new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -164,6 +165,7 @@ export default function DailyClient({
       "Make it yours",
       "Your time zone, morning reminder, and Home Screen setup.",
     ],
+    resources: ["Country resources", "Keep useful links organized by country."],
   }
   return (
     <div className="space-y-8">
@@ -372,13 +374,18 @@ export default function DailyClient({
             <article
               key={task.id}
               draggable={!locked}
-              onDragStart={() => setDraggedTask(task.id)}
+              onDragStart={(event) => {
+                setDraggedTask(task.id)
+                event.dataTransfer.effectAllowed = "move"
+                event.dataTransfer.setData("text/plain", task.id)
+              }}
               onDragEnd={() => setDraggedTask(null)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={async (event) => {
                 event.preventDefault()
-                if (draggedTask && draggedTask !== task.id) {
-                  await save({ action: "reorder", id: draggedTask, targetId: task.id })
+                const sourceId = event.dataTransfer.getData("text/plain") || draggedTask
+                if (sourceId && sourceId !== task.id) {
+                  await save({ action: "reorder", id: sourceId, targetId: task.id })
                 }
                 setDraggedTask(null)
               }}
@@ -448,6 +455,7 @@ export default function DailyClient({
           }
         />
       )}
+      {view === "resources" && <Resources data={data} catalog={catalog} save={save} />}
       {view === "insights" && <Insights data={data} catalog={catalog} />}
       {view === "settings" && (
         <ReminderSettings data={data} busy={locked} save={save} />

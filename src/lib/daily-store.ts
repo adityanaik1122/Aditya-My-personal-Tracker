@@ -34,6 +34,7 @@ export function dailyView(daily: DailyStore, today: string) {
     settings: daily.settings,
     tasks: daily.tasks,
     taskOrder: daily.taskOrder ?? daily.tasks.map((task) => task.id),
+    resources: daily.resources ?? [],
     occurrences: Object.values(daily.occurrences),
     coursePlans: daily.coursePlans,
     push: {
@@ -113,11 +114,23 @@ export function mutateDaily(
     const order = daily.taskOrder ?? daily.tasks.map((task) => task.id)
     const index = order.indexOf(id)
     const target = order.indexOf(targetId)
-    if (!id || !targetId || id === targetId || index < 0 || target < 0)
-      throw new Error("Task cannot be moved there.")
+    if (!id || !targetId || id === targetId || index < 0 || target < 0) return
     order.splice(index, 1)
     order.splice(order.indexOf(targetId), 0, id)
     daily.taskOrder = order
+  } else if (body.action === "resource") {
+    if (body.method === "delete") {
+      daily.resources = (daily.resources ?? []).filter((resource) => resource.id !== body.id)
+    } else {
+      if (typeof body.title !== "string" || !body.title.trim() || typeof body.url !== "string" || !/^https?:\/\//i.test(body.url))
+        throw new Error("Add a title and a valid http(s) link.")
+      const resource = {
+        id: randomUUID(), country: typeof body.country === "string" && body.country.trim() ? body.country.trim() : "Unsorted",
+        title: body.title.trim(), url: body.url.trim(), type: ["Jobs", "Government", "Housing", "Video", "Other"].includes(String(body.type)) ? body.type as "Jobs" | "Government" | "Housing" | "Video" | "Other" : "Other",
+        status: "To review" as const, notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) : "", createdAt: new Date().toISOString(),
+      }
+      daily.resources = [resource, ...(daily.resources ?? [])]
+    }
   } else if (body.action === "occurrence") {
     if (!Object.hasOwn(daily.occurrences, String(body.id)))
       throw new Error("Occurrence not found.")
