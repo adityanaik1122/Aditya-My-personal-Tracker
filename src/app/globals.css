@@ -1,4 +1,30 @@
 @import "tailwindcss";
+
+@keyframes completion-pop {
+  0% { opacity: 0; transform: translateY(5px) scale(.92); }
+  25% { opacity: 1; transform: translateY(0) scale(1.04); }
+  100% { opacity: 0; transform: translateY(-8px) scale(1); }
+}
+
+@keyframes completion-burst {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateY(-22px) scale(.7); }
+}
+
+.completion-pop { display: inline-block; animation: completion-pop 900ms ease-out both; }
+.completion-burst { position: absolute; left: 1px; top: 8px; width: 4px; height: 4px; }
+.completion-burst i { position: absolute; display: block; width: 4px; height: 9px; border-radius: 999px; background: #fbbf24; animation: completion-burst 700ms ease-out both; }
+.completion-burst i:nth-child(1) { --angle: 0deg; background: #10b981; }
+.completion-burst i:nth-child(2) { --angle: 60deg; background: #06b6d4; }
+.completion-burst i:nth-child(3) { --angle: 120deg; background: #f59e0b; }
+.completion-burst i:nth-child(4) { --angle: 180deg; background: #8b5cf6; }
+.completion-burst i:nth-child(5) { --angle: 240deg; background: #ef4444; }
+.completion-burst i:nth-child(6) { --angle: 300deg; background: #14b8a6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .completion-pop, .completion-burst i { animation: none; }
+  .completion-pop { opacity: 1; }
+}
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

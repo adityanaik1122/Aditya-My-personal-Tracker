@@ -16,6 +16,7 @@ export default function OccurrenceCard({
   save: Save
 }) {
   const [moving, setMoving] = useState(false)
+  const [celebrating, setCelebrating] = useState(false)
   const [target, setTarget] = useState(addDays(today, 1))
   const url =
     row.task.url || (row.task.courseId ? `/courses/${row.task.courseId}` : "")
@@ -30,13 +31,18 @@ export default function OccurrenceCard({
             aria-label={`Complete ${row.task.title}`}
             checked={row.status === "completed"}
             disabled={busy}
-            onChange={() =>
-              save({
+            onChange={async () => {
+              const completing = row.status !== "completed"
+              const saved = await save({
                 action: "occurrence",
                 id: row.id,
-                status: row.status === "completed" ? "pending" : "completed",
+                status: completing ? "completed" : "pending",
               })
-            }
+              if (saved && completing) {
+                setCelebrating(true)
+                window.setTimeout(() => setCelebrating(false), 900)
+              }
+            }}
             className="size-6 accent-emerald-800"
           />
         </label>
@@ -93,6 +99,12 @@ export default function OccurrenceCard({
           </a>
         )}
       </div>
+      {celebrating && (
+        <div className="pointer-events-none relative ml-14 mt-1 h-4" aria-live="polite">
+          <span className="completion-pop text-xs font-semibold text-emerald-600">Nice work!</span>
+          <span className="completion-burst" aria-hidden="true"><i /><i /><i /><i /><i /><i /></span>
+        </div>
+      )}
       <div className="ml-14 mt-2 flex flex-wrap gap-1 sm:ml-15">
         {!url && (
           <Link

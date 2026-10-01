@@ -2,6 +2,7 @@ import Link from "next/link"
 import { addDays, categories, summary, consistency } from "@/lib/daily-model"
 import type { DailyView } from "@/lib/daily-store"
 import type { Catalog } from "./daily-ui"
+import ProgressRing from "./progress-ring"
 export default function Insights({
   data,
   catalog,
@@ -10,6 +11,27 @@ export default function Insights({
   catalog: Catalog
 }) {
   const rows = data.occurrences.filter((r) => r.date <= data.today)
+  const todayRows = rows.filter((r) => r.date === data.today)
+  const routineRows = todayRows.filter((r) => r.task.recurrence !== "once")
+  const oneOffRows = todayRows.filter((r) => r.task.recurrence === "once")
+  const todaySummary = summary(todayRows)
+  const routineSummary = summary(routineRows)
+  const oneOffSummary = summary(oneOffRows)
+  const categoryColors = ["#10b981", "#06b6d4", "#f59e0b", "#8b5cf6"]
+  const categoryMinutes = categories.map((category) => ({
+    category,
+    minutes: todayRows
+      .filter((r) => r.task.category === category)
+      .reduce((total, r) => total + r.task.minutes, 0),
+  }))
+  const totalMinutes = categoryMinutes.reduce((total, item) => total + item.minutes, 0)
+  let categoryOffset = 0
+  const categoryStops = categoryMinutes.map((item, index) => {
+    const start = totalMinutes ? (categoryOffset / totalMinutes) * 100 : 0
+    categoryOffset += item.minutes
+    const end = totalMinutes ? (categoryOffset / totalMinutes) * 100 : 0
+    return `${categoryColors[index]} ${start}% ${end}%`
+  })
   const windows = [
     { label: "Today", start: data.today },
     { label: "Last 7 days", start: addDays(data.today, -6) },
@@ -37,6 +59,20 @@ export default function Insights({
         })}
       </div>
       <section className="rounded-2xl border bg-white p-5 sm:p-7">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm text-zinc-500">Today at a glance</p>
+            <h2 className="mt-1 text-xl font-semibold">Keep the streak moving</h2>
+          </div>
+          <p className="text-xs text-zinc-500">Completion is counted from scheduled tasks</p>
+        </div>
+        <div className="mt-6 grid gap-6 sm:grid-cols-3">
+          <ProgressRing value={todaySummary.rate} label="All tasks" detail={`${todaySummary.completed}/${todaySummary.total} completed`} />
+          <ProgressRing value={routineSummary.rate} label="Daily routines" detail={`${routineSummary.completed}/${routineSummary.total} completed`} tone="sky" />
+          <ProgressRing value={oneOffSummary.rate} label="One-off tasks" detail={oneOffSummary.total ? `${oneOffSummary.completed}/${oneOffSummary.total} completed` : "Nothing due today"} tone="amber" />
+        </div>
+      </section>
+      <section className="rounded-2xl border bg-white p-5 sm:p-7">
         <h2 className="font-semibold">The last two weeks</h2>
         <div className="mt-6 flex h-36 items-end gap-1.5 sm:gap-3">
           {recent.map((date) => {
@@ -51,7 +87,7 @@ export default function Insights({
                   title={`${date}: ${s.completed}/${s.total} complete, ${s.skipped} skipped`}
                 >
                   <div
-                    className="w-full rounded-md bg-emerald-700"
+                    className="w-full rounded-md bg-gradient-to-t from-emerald-500 to-cyan-400"
                     style={{
                       height:
                         s.rate === null ? "0%" : `${Math.max(3, s.rate)}%`,
@@ -146,7 +182,7 @@ export default function Insights({
                     </div>
                     <div className="mt-2 h-2 rounded-full bg-zinc-100">
                       <div
-                        className="h-2 rounded-full bg-emerald-700"
+                        className="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-500"
                         style={{ width: `${s.rate || 0}%` }}
                       />
                     </div>
@@ -178,13 +214,42 @@ export default function Insights({
                 </div>
                 <div className="mt-3 h-2 rounded-full bg-zinc-100">
                   <div
-                    className="h-full rounded-full bg-emerald-700"
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
                     style={{ width: `${s.rate || 0}%` }}
                   />
                 </div>
               </div>
             )
           })}
+        </div>
+      </section>
+      <section className="rounded-2xl border bg-white p-5 sm:p-7">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Where today’s time goes</h2>
+            <p className="mt-1 text-xs text-zinc-500">Planned minutes by category</p>
+          </div>
+          <span className="text-sm text-zinc-500">{totalMinutes} min planned</span>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-7">
+          <div
+            className="relative size-36 shrink-0 rounded-full"
+            style={{ background: totalMinutes ? `conic-gradient(${categoryStops.join(", ")})` : "#f4f4f5" }}
+            role="img"
+            aria-label="Today’s planned minutes by category"
+          >
+            <div className="absolute inset-4 flex items-center justify-center rounded-full bg-white text-center">
+              <span className="text-xs text-zinc-500">today<br /><strong className="text-lg text-zinc-900">{totalMinutes}m</strong></span>
+            </div>
+          </div>
+          <div className="grid min-w-48 flex-1 gap-3 sm:grid-cols-2">
+            {categoryMinutes.map((item, index) => (
+              <div key={item.category} className="flex items-center justify-between gap-3 text-sm">
+                <span className="flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: categoryColors[index] }} />{item.category}</span>
+                <span className="text-zinc-500">{item.minutes}m</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
       <section className="rounded-2xl border bg-white p-5">
