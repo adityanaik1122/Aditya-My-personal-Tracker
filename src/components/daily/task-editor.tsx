@@ -1,7 +1,7 @@
 "use client"
 import { useState, type FormEvent } from "react"
 import { Check } from "lucide-react"
-import { categories, type Task, type TaskSpec } from "@/lib/daily-model"
+import { type Task, type TaskSpec } from "@/lib/daily-model"
 import {
   Label,
   field,
@@ -13,18 +13,24 @@ import {
 } from "./daily-ui"
 export default function TaskEditor({
   initial,
+  categories,
   catalog,
   busy,
   save,
   close,
 }: {
   initial: TaskSpec | Task
+  categories: string[]
   catalog: Catalog
   busy: boolean
   save: Save
   close: () => void
 }) {
   const [task, setTask] = useState<TaskSpec>(initial)
+  const [manage, setManage] = useState(false)
+  const [categoryName, setCategoryName] = useState("")
+  const [replacement, setReplacement] = useState("")
+  const selectedCategory = categories.includes(task.category) ? task.category : categories[0]
   const set = <K extends keyof TaskSpec>(key: K, value: TaskSpec[K]) =>
     setTask((t) => ({ ...t, [key]: value }))
   const course = catalog.find((c) => c.id === task.courseId)
@@ -48,7 +54,7 @@ export default function TaskEditor({
             await save({
               action: "task",
               id: "id" in initial ? initial.id : undefined,
-              task,
+              task: { ...task, category: selectedCategory },
             })
           )
             close()
@@ -68,10 +74,10 @@ export default function TaskEditor({
             />
           </Label>
         </div>
-        <Label name="Category">
+        <div><Label name="Category">
           <select
             className={field}
-            value={task.category}
+            value={selectedCategory}
             onChange={(e) =>
               set("category", e.target.value as TaskSpec["category"])
             }
@@ -81,6 +87,20 @@ export default function TaskEditor({
             ))}
           </select>
         </Label>
+        <button type="button" className="mt-2 text-sm font-medium text-emerald-800 underline" onClick={() => { setManage(!manage); setCategoryName(selectedCategory) }}>Manage categories</button>
+        {manage && <div className="mt-3 space-y-3 rounded-xl border bg-emerald-50/40 p-3">
+          <Label name="Category name"><input className={field} maxLength={60} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /></Label>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={button} disabled={busy || !categoryName.trim()} onClick={async () => { if (await save({ action: "category", method: "create", name: categoryName })) set("category", categoryName.trim()) }}>Add new</button>
+            <button type="button" className={button} disabled={busy || !categoryName.trim()} onClick={async () => { if (await save({ action: "category", method: "rename", previous: selectedCategory, name: categoryName })) set("category", categoryName.trim()) }}>Rename selected</button>
+          </div>
+          <p className="text-xs text-zinc-600">Renaming updates all tasks and history in this category.</p>
+          <Label name="Move tasks to before deleting"><select className={field} value={replacement} onChange={(e) => setReplacement(e.target.value)}><option value="">Choose another category</option>{categories.filter((c) => c !== selectedCategory).map((c) => <option key={c}>{c}</option>)}</select></Label>
+          <button type="button" className={`${button} text-red-700`} disabled={busy || !categories.includes(replacement) || replacement === selectedCategory} onClick={async () => {
+            if (window.confirm(`Delete category "${selectedCategory}" and move its tasks and history to "${replacement}"?`) && await save({ action: "category", method: "delete", previous: selectedCategory, name: replacement })) { set("category", replacement); setReplacement("") }
+          }}>Delete selected category</button>
+        </div>}
+        </div>
         <Label name="Estimated minutes">
           <input
             required

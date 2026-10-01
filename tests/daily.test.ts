@@ -6,6 +6,8 @@ import path from "node:path"
 import {
   addDays,
   changeOccurrence,
+  deleteTask,
+  changeCategory,
   claimReminder,
   consistency,
   localDate,
@@ -45,6 +47,44 @@ function store() {
   ]
   return d
 }
+test("deleting a routine removes pending work but preserves history", () => {
+  const d = store()
+  d.taskOrder = ["t"]
+  materialize(d, "2026-03-03")
+  deleteTask(d, "t", "2026-03-03")
+  assert.equal(d.tasks.length, 0)
+  assert.deepEqual(d.taskOrder, [])
+  assert.ok(d.occurrences["t:2026-03-02"])
+  assert.equal(d.occurrences["t:2026-03-03"], undefined)
+  materialize(d, "2026-03-04")
+  assert.equal(d.occurrences["t:2026-03-04"], undefined)
+  assert.throws(() => deleteTask(d, "missing", "2026-03-04"), /Task not found/)
+})
+test("deleting a task keeps today's completion and accepts AI Interview", () => {
+  const d = store()
+  materialize(d, "2026-03-01")
+  d.occurrences["t:2026-03-01"].status = "completed"
+  deleteTask(d, "t", "2026-03-01")
+  assert.equal(d.occurrences["t:2026-03-01"].status, "completed")
+  assert.equal(validateTask({ ...spec, category: "AI Interview" }).category, "AI Interview")
+})
+test("category CRUD preserves tasks and occurrence history", () => {
+  const d = store()
+  d.categories = ["Learning", "Hobbies"]
+  materialize(d, "2026-03-01")
+  changeCategory(d, { method: "create", name: "My custom category" })
+  assert.ok(d.categories.includes("My custom category"))
+  assert.throws(() => changeCategory(d, { method: "create", name: "learning", previous: "Learning" }), /already exists/)
+  changeCategory(d, { method: "rename", previous: "Learning", name: "AI practice" })
+  assert.equal(d.tasks[0].category, "AI practice")
+  assert.equal(d.tasks[0].versions[0].spec.category, "AI practice")
+  assert.equal(d.occurrences["t:2026-03-01"].task.category, "AI practice")
+  assert.throws(() => changeCategory(d, { method: "delete", previous: "AI practice", name: "Missing" }), /another category/)
+  changeCategory(d, { method: "delete", previous: "AI practice", name: "Hobbies" })
+  assert.equal(d.tasks[0].category, "Hobbies")
+  assert.equal(d.occurrences["t:2026-03-01"].task.category, "Hobbies")
+  assert.ok(!d.categories.includes("AI practice"))
+})
 test("all recurrence modes, pause and inclusive boundaries", () => {
   assert.equal(scheduled(spec, "2026-02-28"), false)
   assert.equal(

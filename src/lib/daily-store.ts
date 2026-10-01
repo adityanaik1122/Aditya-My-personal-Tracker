@@ -5,6 +5,9 @@ import { updateStore } from "./store"
 import {
   addDays,
   changeOccurrence,
+  deleteTask,
+  categories,
+  changeCategory,
   localDate,
   materialize,
   newDailyStore,
@@ -29,6 +32,7 @@ export function dailyTransaction<T>(
       Inspiration: "Hobbies",
       Personal: "Mental and physical Health",
     }
+    if (!daily.categories) {
     for (const task of daily.tasks) {
       const mapped = legacyCategories[String(task.category)]
       if (mapped) {
@@ -40,6 +44,8 @@ export function dailyTransaction<T>(
       const mapped = legacyCategories[String(occurrence.task.category)]
       if (mapped) occurrence.task.category = mapped
     }
+    daily.categories = [...new Set([...categories, ...daily.tasks.map((task) => task.category), ...Object.values(daily.occurrences).map((row) => row.task.category)])]
+    }
     const today = localDate(now, daily.settings.timeZone)
     materialize(daily, today)
     return fn(daily, today)
@@ -50,6 +56,7 @@ export function dailyView(daily: DailyStore, today: string) {
     today,
     settings: daily.settings,
     tasks: daily.tasks,
+    categories: daily.categories ?? [...categories],
     taskOrder: daily.taskOrder ?? daily.tasks.map((task) => task.id),
     resources: daily.resources ?? [],
     occurrences: Object.values(daily.occurrences),
@@ -77,8 +84,15 @@ export function mutateDaily(
   today: string,
   body: Record<string, unknown>,
 ) {
-  if (body.action === "task") {
+  if (body.action === "category") {
+    changeCategory(daily, body)
+  } else if (body.action === "delete-task") {
+    if (typeof body.id !== "string") throw new Error("Task not found.")
+    deleteTask(daily, body.id, today)
+  } else if (body.action === "task") {
     const spec = validateTask(body.task)
+    const allowedCategories: readonly string[] = daily.categories ?? categories
+    if (!allowedCategories.includes(spec.category)) throw new Error("Choose an existing category.")
     if (spec.courseId && !courses.some((c) => c.id === spec.courseId))
       throw new Error("Unknown course.")
     const existing =

@@ -5,8 +5,9 @@ export const categories = [
   "IT Study",
   "Design Study",
   "Hobbies",
+  "AI Interview",
 ] as const
-export type Category = (typeof categories)[number] | "Work" | "Learning" | "Inspiration" | "Personal"
+export type Category = string
 export type Recurrence = "daily" | "weekdays" | "weekly" | "once"
 export interface TaskSpec {
   title: string
@@ -72,6 +73,7 @@ export interface DailyStore {
     remindersEnabled: boolean
   }
   tasks: Task[]
+  categories?: string[]
   taskOrder?: string[]
   resources?: Resource[]
   occurrences: Record<string, Occurrence>
@@ -80,6 +82,41 @@ export interface DailyStore {
   subscriptions: Subscription[]
   deliveries: Record<string, Delivery>
   schedulerLastSeen?: string
+}
+export function deleteTask(store: DailyStore, id: string, today: string) {
+  if (!store.tasks.some((task) => task.id === id)) throw new Error("Task not found.")
+  store.tasks = store.tasks.filter((task) => task.id !== id)
+  store.taskOrder = store.taskOrder?.filter((taskId) => taskId !== id)
+  for (const [key, row] of Object.entries(store.occurrences)) {
+    // Retain past records and completed/skipped history for accurate insights.
+    if (row.taskId === id && row.date >= today && row.status === "pending") {
+      delete store.occurrences[key]
+    }
+  }
+}
+export function changeCategory(store: DailyStore, body: Record<string, unknown>) {
+  const list = store.categories ?? [...categories]
+  const name = typeof body.name === "string" ? body.name.trim() : ""
+  const previous = typeof body.previous === "string" ? body.previous : ""
+  if (!["create", "rename", "delete"].includes(String(body.method))) throw new Error("Invalid category action.")
+  if (body.method !== "create" && !list.includes(previous)) throw new Error("Category no longer exists. Reload and try again.")
+  if (body.method === "delete") {
+    if (name === previous || !list.includes(name)) throw new Error("Choose another category to move tasks into.")
+  } else {
+    if (!name || name.length > 60) throw new Error("Use a category name between 1 and 60 characters.")
+    if (list.some((item) => (body.method === "create" || item !== previous) && item.toLowerCase() === name.toLowerCase())) throw new Error("That category already exists.")
+  }
+  if (body.method === "create") {
+    store.categories = [...list, name]
+    return
+  }
+  // Category labels are shared by tasks, their versions and historical snapshots.
+  for (const task of store.tasks) {
+    if (task.category === previous) task.category = name
+    for (const version of task.versions) if (version.spec.category === previous) version.spec.category = name
+  }
+  for (const row of Object.values(store.occurrences)) if (row.task.category === previous) row.task.category = name
+  store.categories = body.method === "delete" ? list.filter((item) => item !== previous) : list.map((item) => item === previous ? name : item)
 }
 export function localDate(now: Date, timeZone: string) {
   const p = new Intl.DateTimeFormat("en-US", {
@@ -261,8 +298,7 @@ export function validateTask(value: unknown): TaskSpec {
       "Use a title (up to 120 characters) and a valid http(s) or local link.",
     )
   if (
-    !categories.includes(x.category as (typeof categories)[number]) &&
-    !["Work", "Learning", "Inspiration", "Personal"].includes(x.category) ||
+    !x.category.trim() || x.category.length > 60 ||
     !["daily", "weekdays", "weekly", "once"].includes(x.recurrence) ||
     !["low", "normal", "high"].includes(x.priority)
   )

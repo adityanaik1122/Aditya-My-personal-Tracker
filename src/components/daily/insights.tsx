@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { addDays, categories, summary, consistency } from "@/lib/daily-model"
+import { addDays, summary, consistency } from "@/lib/daily-model"
 import type { DailyView } from "@/lib/daily-store"
 import type { Catalog } from "./daily-ui"
 import ProgressRing from "./progress-ring"
@@ -11,13 +11,14 @@ export default function Insights({
   catalog: Catalog
 }) {
   const rows = data.occurrences.filter((r) => r.date <= data.today)
+  const categories = data.categories
   const todayRows = rows.filter((r) => r.date === data.today)
   const routineRows = todayRows.filter((r) => r.task.recurrence !== "once")
   const oneOffRows = todayRows.filter((r) => r.task.recurrence === "once")
   const todaySummary = summary(todayRows)
   const routineSummary = summary(routineRows)
   const oneOffSummary = summary(oneOffRows)
-  const categoryColors = ["#10b981", "#06b6d4", "#f59e0b", "#8b5cf6"]
+  const categoryColors = ["#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#3b82f6"]
   const categoryMinutes = categories.map((category) => ({
     category,
     minutes: todayRows
@@ -30,7 +31,7 @@ export default function Insights({
     const start = totalMinutes ? (categoryOffset / totalMinutes) * 100 : 0
     categoryOffset += item.minutes
     const end = totalMinutes ? (categoryOffset / totalMinutes) * 100 : 0
-    return `${categoryColors[index]} ${start}% ${end}%`
+    return `${categoryColors[index % categoryColors.length]} ${start}% ${end}%`
   })
   const windows = [
     { label: "Today", start: data.today },
@@ -245,7 +246,7 @@ export default function Insights({
           <div className="grid min-w-48 flex-1 gap-3 sm:grid-cols-2">
             {categoryMinutes.map((item, index) => (
               <div key={item.category} className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: categoryColors[index] }} />{item.category}</span>
+                <span className="flex items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} />{item.category}</span>
                 <span className="text-zinc-500">{item.minutes}m</span>
               </div>
             ))}

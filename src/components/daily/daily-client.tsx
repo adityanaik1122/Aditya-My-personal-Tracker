@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react"
 import { Plus, CalendarDays, Pause, Play, ArrowRight, GripVertical } from "lucide-react"
 import {
   summary,
-  categories,
   type Task,
   type TaskSpec,
 } from "@/lib/daily-model"
@@ -55,6 +54,7 @@ export default function DailyClient({
   view: string
 }) {
   const [data, setData] = useState(initial)
+  const categories = data.categories
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
@@ -226,6 +226,7 @@ export default function DailyClient({
         <TaskEditor
           key={"id" in editor ? editor.id : `new-${editor.recurrence}`}
           initial={editor}
+          categories={categories}
           catalog={catalog.filter(
             (c) =>
               data.coursePlans[c.id]?.status === "active" ||
@@ -432,6 +433,19 @@ export default function DailyClient({
                 >
                   {task.paused ? <Play size={15} /> : <Pause size={15} />}
                   {task.paused ? "Resume" : "Pause"}
+                </button>
+                <button
+                  type="button"
+                  className={`${button} text-red-700 hover:bg-red-50`}
+                  disabled={locked}
+                  aria-label={`Delete ${task.title}`}
+                  onClick={() => {
+                    if (window.confirm(`Delete "${task.title}"? This removes the task and its pending occurrences from today onward. Past records and completed/skipped history are kept.`)) {
+                      void save({ action: "delete-task", id: task.id })
+                    }
+                  }}
+                >
+                  Delete
                 </button>
               </div>
             </article>
