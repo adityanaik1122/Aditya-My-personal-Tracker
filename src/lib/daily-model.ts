@@ -8,6 +8,8 @@ export const categories = [
   "AI Interview",
 ] as const
 export type Category = string
+export type TaskKind = "routines" | "once"
+export const taskKindOf = (task: TaskSpec): TaskKind => task.recurrence === "once" ? "once" : "routines"
 export type Recurrence = "daily" | "weekdays" | "weekly" | "once"
 export interface TaskSpec {
   title: string
@@ -74,6 +76,9 @@ export interface DailyStore {
   }
   tasks: Task[]
   categories?: string[]
+  categoryGroups?: Record<TaskKind, string[]>
+  focus?: Record<string, string[]>
+  deletedTasks?: Array<{ task: Task; occurrences: Occurrence[]; position: number; expiresAt: number }>
   taskOrder?: string[]
   resources?: Resource[]
   occurrences: Record<string, Occurrence>
@@ -83,8 +88,22 @@ export interface DailyStore {
   deliveries: Record<string, Delivery>
   schedulerLastSeen?: string
 }
-export function deleteTask(store: DailyStore, id: string, today: string) {
+export function initializeOrganization(store: DailyStore) {
+  store.categoryGroups ??= {
+    routines: [...(store.categories ?? categories)],
+    once: [...new Set(["Errands", "Applications", "Projects", "Appointments", ...store.tasks.filter((t) => t.recurrence === "once").map((t) => t.category), ...Object.values(store.occurrences).filter((r) => r.task.recurrence === "once").map((r) => r.task.category)])],
+  }
+  const ids = new Set(store.tasks.map((task) => task.id))
+  store.taskOrder = [...new Set([...(store.taskOrder ?? []).filter((id) => ids.has(id)), ...ids])]
+}
+export function deleteTask(store: DailyStore, id: string, today: string, now = Date.now()) {
   if (!store.tasks.some((task) => task.id === id)) throw new Error("Task not found.")
+  initializeOrganization(store)
+  const removed = Object.values(store.occurrences).filter((row) => row.taskId === id && row.date >= today && row.status === "pending")
+  store.deletedTasks = [...(store.deletedTasks ?? []).filter((entry) => entry.expiresAt > now), {
+    task: structuredClone(store.tasks.find((task) => task.id === id)!),
+    occurrences: structuredClone(removed), position: store.taskOrder!.indexOf(id), expiresAt: now + 10 * 60 * 1000,
+  }].slice(-10)
   store.tasks = store.tasks.filter((task) => task.id !== id)
   store.taskOrder = store.taskOrder?.filter((taskId) => taskId !== id)
   for (const [key, row] of Object.entries(store.occurrences)) {
@@ -94,8 +113,50 @@ export function deleteTask(store: DailyStore, id: string, today: string) {
     }
   }
 }
+export function restoreTask(store: DailyStore, id: string, now = Date.now()) {
+  const entry = store.deletedTasks?.find((item) => item.task.id === id && item.expiresAt > now)
+  if (!entry || store.tasks.some((task) => task.id === id)) throw new Error("This task can no longer be restored.")
+  store.tasks.push(entry.task)
+  initializeOrganization(store)
+  store.taskOrder = store.taskOrder!.filter((taskId) => taskId !== id)
+  store.taskOrder.splice(Math.max(0, entry.position), 0, id)
+  for (const row of entry.occurrences) store.occurrences[row.id] ??= row
+  store.deletedTasks = store.deletedTasks!.filter((item) => item.task.id !== id)
+}
+export function setFocus(store: DailyStore, today: string, id: string, selected: boolean) {
+  const row = store.occurrences[id]
+  if (!row || row.date !== today || row.status === "skipped") throw new Error("Choose a task scheduled for today.")
+  const ids = (store.focus?.[today] ?? []).filter((key) => store.occurrences[key]?.date === today && store.occurrences[key]?.status !== "skipped")
+  const next = ids.filter((key) => key !== id)
+  if (selected) next.push(id)
+  if (next.length > 3) throw new Error("Choose up to three priorities for today.")
+  store.focus ??= {}
+  store.focus[today] = next
+}
+export function moveTask(store: DailyStore, today: string, body: Record<string, unknown>) {
+  initializeOrganization(store)
+  const task = store.tasks.find((item) => item.id === body.id)
+  const target = store.tasks.find((item) => item.id === body.targetId)
+  if (!task) throw new Error("Task no longer exists.")
+  const kind = taskKindOf(task)
+  if (target && taskKindOf(target) !== kind) throw new Error("Move tasks within the same task type.")
+  if (body.targetId && !target) throw new Error("Drop target no longer exists.")
+  if (target?.id === task.id) return
+  const category = target?.category ?? body.category
+  if (typeof category !== "string" || !store.categoryGroups![kind].includes(category)) throw new Error("Choose an existing category.")
+  task.category = category
+  const spec = validateTask(task)
+  task.versions = [...task.versions.filter((version) => version.from < today), { from: today, spec }]
+  for (const row of Object.values(store.occurrences)) if (row.taskId === task.id && row.date >= today && row.status === "pending") row.task.category = category
+  const order = store.taskOrder!.filter((id) => id !== task.id)
+  const index = target ? order.indexOf(target.id) + (body.placement === "after" ? 1 : 0) : order.length
+  order.splice(index, 0, task.id)
+  store.taskOrder = order
+}
 export function changeCategory(store: DailyStore, body: Record<string, unknown>) {
-  const list = store.categories ?? [...categories]
+  initializeOrganization(store)
+  const kind = body.kind === "once" ? "once" : "routines"
+  const list = store.categoryGroups![kind]
   const name = typeof body.name === "string" ? body.name.trim() : ""
   const previous = typeof body.previous === "string" ? body.previous : ""
   if (!["create", "rename", "delete"].includes(String(body.method))) throw new Error("Invalid category action.")
@@ -107,16 +168,16 @@ export function changeCategory(store: DailyStore, body: Record<string, unknown>)
     if (list.some((item) => (body.method === "create" || item !== previous) && item.toLowerCase() === name.toLowerCase())) throw new Error("That category already exists.")
   }
   if (body.method === "create") {
-    store.categories = [...list, name]
+    store.categoryGroups![kind] = [...list, name]
     return
   }
   // Category labels are shared by tasks, their versions and historical snapshots.
-  for (const task of store.tasks) {
-    if (task.category === previous) task.category = name
-    for (const version of task.versions) if (version.spec.category === previous) version.spec.category = name
+  for (const task of [...store.tasks, ...(store.deletedTasks ?? []).map((entry) => entry.task)]) {
+    if (taskKindOf(task) === kind && task.category === previous) task.category = name
+    for (const version of task.versions) if (taskKindOf(version.spec) === kind && version.spec.category === previous) version.spec.category = name
   }
-  for (const row of Object.values(store.occurrences)) if (row.task.category === previous) row.task.category = name
-  store.categories = body.method === "delete" ? list.filter((item) => item !== previous) : list.map((item) => item === previous ? name : item)
+  for (const row of [...Object.values(store.occurrences), ...(store.deletedTasks ?? []).flatMap((entry) => entry.occurrences)]) if (taskKindOf(row.task) === kind && row.task.category === previous) row.task.category = name
+  store.categoryGroups![kind] = body.method === "delete" ? list.filter((item) => item !== previous) : list.map((item) => item === previous ? name : item)
 }
 export function localDate(now: Date, timeZone: string) {
   const p = new Intl.DateTimeFormat("en-US", {

@@ -16,6 +16,9 @@ import {
 } from "./daily-ui"
 import ReminderSettings from "./reminder-settings"
 import TaskEditor from "./task-editor"
+import CategoryCard from "./category-card"
+import TopThree from "./top-three"
+import MoveTaskMenu from "./move-task-menu"
 import OccurrenceCard from "./occurrence-card"
 import Study from "./study"
 import Insights from "./insights"
@@ -54,7 +57,6 @@ export default function DailyClient({
   view: string
 }) {
   const [data, setData] = useState(initial)
-  const categories = data.categories
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
@@ -63,6 +65,7 @@ export default function DailyClient({
   const [editor, setEditor] = useState<TaskSpec | Task | null>(null)
   const [taskKind, setTaskKind] = useState<"routines" | "once">("routines")
   const [draggedTask, setDraggedTask] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id?: string; category?: string; placement?: "before" | "after" } | null>(null)
   const saving = useRef(false)
   const revision = useRef(0)
   const currentToday = useRef(initial.today)
@@ -189,6 +192,7 @@ export default function DailyClient({
             onClick={() =>
               setEditor({
                 ...blank(data.today),
+                category: data.categoryGroups[taskKind][0],
                 recurrence: taskKind === "once" ? "once" : "daily",
               })
             }
@@ -222,11 +226,15 @@ export default function DailyClient({
         {message}
         {busy ? "Saving…" : ""}
       </p>
+      {data.deletedTasks.length > 0 && <aside className="rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="Recently deleted tasks">
+        <p className="text-sm font-medium">Recently deleted · Undo is available for 10 minutes</p>
+        {data.deletedTasks.map((task) => <div key={task.id} className="mt-2 flex items-center justify-between gap-3 text-sm"><span>{task.title}</span><button className={button} disabled={locked} onClick={() => save({ action: "restore-task", id: task.id })}>Undo deletion</button></div>)}
+      </aside>}
       {editor && (
         <TaskEditor
           key={"id" in editor ? editor.id : `new-${editor.recurrence}`}
           initial={editor}
-          categories={categories}
+          categoryGroups={data.categoryGroups}
           catalog={catalog.filter(
             (c) =>
               data.coursePlans[c.id]?.status === "active" ||
@@ -292,6 +300,7 @@ export default function DailyClient({
               </p>
             </div>
           </section>
+          {date === data.today && <TopThree data={data} save={save} busy={locked} />}
           {(["routines", "once"] as const).map((kind) => {
             const group = rows.filter((r) => (r.task.recurrence === "once") === (kind === "once"))
             const groupStats = summary(group)
@@ -304,24 +313,18 @@ export default function DailyClient({
                     <p className="mt-1 text-sm text-zinc-500">{isRoutine ? "Repeating activities scheduled for this date. They return on their next scheduled day." : "Do these once. Completed tasks stay done."}</p>
                     <p className="mt-2 text-sm font-medium text-emerald-800">{groupStats.completed} of {groupStats.total} completed</p>
                   </div>
-                  <button className={button} disabled={locked} onClick={() => setEditor({ ...blank(data.today), recurrence: isRoutine ? "daily" : "once" })}>
+                  <button className={button} disabled={locked} onClick={() => setEditor({ ...blank(data.today), category: data.categoryGroups[kind][0], recurrence: isRoutine ? "daily" : "once" })}>
                     <Plus size={16} />{isRoutine ? "Add routine" : "Add task"}
                   </button>
                 </div>
                 {group.length === 0 && <p className="rounded-2xl border border-dashed p-6 text-sm text-zinc-500">{isRoutine ? "No routines scheduled for this date." : "No one-off tasks scheduled for this date."}</p>}
                 <div className="space-y-6">
-                  {categories.map((category) => {
+                  {data.categoryGroups[kind].map((category) => {
                     const categoryRows = group.filter((row) => row.task.category === category)
                     if (!categoryRows.length) return null
-                    return <div key={category} className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm">
-                      <div className="flex items-center justify-between border-b border-emerald-900/10 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3">
-                        <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-800"><span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />{category}</h3>
-                        <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-emerald-800">{categoryRows.length} {categoryRows.length === 1 ? "task" : "tasks"}</span>
-                      </div>
-                      <div className="space-y-3 p-3 sm:p-4">
-                        {[...categoryRows].sort((a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || Number(b.task.priority === "high") - Number(a.task.priority === "high")).map((row) => <OccurrenceCard key={row.id} row={row} today={data.today} busy={locked} save={save} />)}
-                      </div>
-                    </div>
+                    return <CategoryCard key={`${date}-${category}`} name={category} total={categoryRows.length} completed={categoryRows.filter((row) => row.status === "completed").length}>
+                        {categoryRows.map((row) => <OccurrenceCard key={row.id} row={row} today={data.today} busy={locked} save={save} />)}
+                    </CategoryCard>
                   })}
                 </div>
               </section>
@@ -367,34 +370,39 @@ export default function DailyClient({
             history.
           </div>
           {!orderedTasks.some(t => (t.recurrence === "once") === (taskKind === "once")) && <Empty title={taskKind === "once" ? "No one-off tasks yet" : "No routines yet"} text={taskKind === "once" ? "Use Add task for something you only need to do once." : "Use Add routine for an activity that repeats."} />}
-          {categories.map((category) => {
+          {data.categoryGroups[taskKind].map((category) => {
             const categoryTasks = orderedTasks.filter(t => (t.recurrence === "once") === (taskKind === "once") && t.category === category)
-            if (!categoryTasks.length) return null
-            return <section key={category} className="overflow-hidden rounded-2xl border border-emerald-900/10 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-emerald-900/10 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3"><h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-800"><span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />{category}</h2><span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-emerald-800">{categoryTasks.length} {categoryTasks.length === 1 ? "task" : "tasks"}</span></div><div className="space-y-3 p-3 sm:p-4">
+            return <CategoryCard key={`${taskKind}-${category}`} name={category} total={categoryTasks.length}
+              highlighted={dropTarget?.category === category}
+              onDragOver={(event) => { if (!locked && draggedTask) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget({ category }) } }}
+              onDrop={async (event) => { event.preventDefault(); if (!locked && draggedTask) await save({ action: "reorder", id: draggedTask, category }); setDraggedTask(null); setDropTarget(null) }}>
+            {!categoryTasks.length && <p className="p-3 text-sm text-zinc-500">No tasks yet. Drop a task here or add one in this category.</p>}
             {categoryTasks.map((task) => {
             return (
             <article
               key={task.id}
-              draggable={!locked}
-              onDragStart={(event) => {
-                setDraggedTask(task.id)
-                event.dataTransfer.effectAllowed = "move"
-                event.dataTransfer.setData("text/plain", task.id)
+              onDragOver={(event) => {
+                if (!locked && draggedTask && draggedTask !== task.id) {
+                  event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"
+                  const box = event.currentTarget.getBoundingClientRect()
+                  setDropTarget({ id: task.id, placement: event.clientY < box.top + box.height / 2 ? "before" : "after" })
+                }
               }}
-              onDragEnd={() => setDraggedTask(null)}
-              onDragOver={(event) => event.preventDefault()}
               onDrop={async (event) => {
                 event.preventDefault()
+                event.stopPropagation()
                 const sourceId = event.dataTransfer.getData("text/plain") || draggedTask
-                if (sourceId && sourceId !== task.id) {
-                  await save({ action: "reorder", id: sourceId, targetId: task.id })
+                if (!locked && draggedTask && sourceId && sourceId !== task.id) {
+                  const box = event.currentTarget.getBoundingClientRect()
+                  await save({ action: "reorder", id: sourceId, targetId: task.id, placement: event.clientY < box.top + box.height / 2 ? "before" : "after" })
                 }
                 setDraggedTask(null)
+                setDropTarget(null)
               }}
-              className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5 transition ${draggedTask === task.id ? "opacity-40" : ""}`}
+              className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5 transition ${draggedTask === task.id ? "opacity-40" : ""} ${dropTarget?.id === task.id ? dropTarget.placement === "before" ? "border-t-4 border-t-cyan-500" : "border-b-4 border-b-cyan-500" : ""}`}
             >
               <div className="flex min-w-0 items-start gap-3">
-                <span className="mt-1 cursor-grab text-zinc-300 active:cursor-grabbing" title="Drag to reorder" aria-label="Drag to reorder">
+                <span draggable={!locked} onDragStart={(event) => { setDraggedTask(task.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", task.id) }} onDragEnd={() => { setDraggedTask(null); setDropTarget(null) }} className="mt-1 cursor-grab text-zinc-500 active:cursor-grabbing" title="Drag to reorder or move category" aria-label="Drag to reorder">
                   <GripVertical size={19} />
                 </span>
                 <div>
@@ -412,6 +420,7 @@ export default function DailyClient({
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                <MoveTaskMenu task={task} tasks={orderedTasks.filter((item) => (item.recurrence === "once") === (taskKind === "once"))} categories={data.categoryGroups[taskKind]} save={save} busy={locked} />
                 <button
                   className={button}
                   disabled={locked}
@@ -440,7 +449,7 @@ export default function DailyClient({
                   disabled={locked}
                   aria-label={`Delete ${task.title}`}
                   onClick={() => {
-                    if (window.confirm(`Delete "${task.title}"? This removes the task and its pending occurrences from today onward. Past records and completed/skipped history are kept.`)) {
+                    if (window.confirm(`Delete "${task.title}"? Pending work from today onward will be removed. History is kept. You can undo this within 10 minutes.`)) {
                       void save({ action: "delete-task", id: task.id })
                     }
                   }}
@@ -450,7 +459,7 @@ export default function DailyClient({
               </div>
             </article>
             )
-          })}</div></section>
+          })}</CategoryCard>
           })}
         </div>
       )}

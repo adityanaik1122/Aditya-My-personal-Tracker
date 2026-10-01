@@ -8,6 +8,10 @@ import {
   changeOccurrence,
   deleteTask,
   changeCategory,
+  initializeOrganization,
+  moveTask,
+  restoreTask,
+  setFocus,
   claimReminder,
   consistency,
   localDate,
@@ -73,7 +77,7 @@ test("category CRUD preserves tasks and occurrence history", () => {
   d.categories = ["Learning", "Hobbies"]
   materialize(d, "2026-03-01")
   changeCategory(d, { method: "create", name: "My custom category" })
-  assert.ok(d.categories.includes("My custom category"))
+  assert.ok(d.categoryGroups!.routines.includes("My custom category"))
   assert.throws(() => changeCategory(d, { method: "create", name: "learning", previous: "Learning" }), /already exists/)
   changeCategory(d, { method: "rename", previous: "Learning", name: "AI practice" })
   assert.equal(d.tasks[0].category, "AI practice")
@@ -83,7 +87,62 @@ test("category CRUD preserves tasks and occurrence history", () => {
   changeCategory(d, { method: "delete", previous: "AI practice", name: "Hobbies" })
   assert.equal(d.tasks[0].category, "Hobbies")
   assert.equal(d.occurrences["t:2026-03-01"].task.category, "Hobbies")
-  assert.ok(!d.categories.includes("AI practice"))
+  assert.ok(!d.categoryGroups!.routines.includes("AI practice"))
+})
+test("routine category edits do not change one-off categories or tasks", () => {
+  const d = store()
+  d.categories = ["Learning", "Hobbies"]
+  d.tasks.push({ ...structuredClone(d.tasks[0]), id: "once", recurrence: "once", versions: [{ from: spec.startDate, spec: { ...spec, recurrence: "once" } }] })
+  materialize(d, "2026-03-01")
+  initializeOrganization(d)
+  changeCategory(d, { method: "rename", kind: "routines", previous: "Learning", name: "Research" })
+  assert.ok(d.categoryGroups!.once.includes("Learning"))
+  assert.equal(d.tasks[1].category, "Learning")
+  assert.equal(d.occurrences["once:2026-03-01"].task.category, "Learning")
+  changeCategory(d, { method: "create", kind: "once", name: "Research" })
+  assert.ok(d.categoryGroups!.once.includes("Research"))
+})
+test("drop before/after and category moves preserve completed history", () => {
+  const d = store()
+  d.categories = ["Learning", "Hobbies"]
+  d.tasks.push({ ...structuredClone(d.tasks[0]), id: "b" })
+  d.taskOrder = ["t"] // Simulates new tasks absent from an old order.
+  materialize(d, "2026-03-02")
+  d.occurrences["t:2026-03-01"].status = "completed"
+  moveTask(d, "2026-03-02", { id: "t", targetId: "b", placement: "after" })
+  assert.deepEqual(d.taskOrder, ["b", "t"])
+  moveTask(d, "2026-03-02", { id: "t", targetId: "b", placement: "before" })
+  assert.deepEqual(d.taskOrder, ["t", "b"])
+  moveTask(d, "2026-03-02", { id: "t", category: "Hobbies" })
+  assert.equal(d.tasks[0].category, "Hobbies")
+  assert.equal(d.occurrences["t:2026-03-01"].task.category, "Learning")
+  assert.equal(d.occurrences["t:2026-03-02"].task.category, "Hobbies")
+  assert.throws(() => moveTask(d, "2026-03-02", { id: "t", category: "Missing" }), /existing category/)
+})
+test("undo restores pending work and survives category rename; expired undo rejected", () => {
+  const d = store()
+  d.categories = ["Learning"]
+  materialize(d, "2026-03-01")
+  deleteTask(d, "t", "2026-03-01", 1000)
+  changeCategory(d, { method: "rename", previous: "Learning", name: "Research" })
+  restoreTask(d, "t", 2000)
+  assert.equal(d.tasks[0].category, "Research")
+  assert.equal(d.occurrences["t:2026-03-01"].task.category, "Research")
+  assert.deepEqual(d.taskOrder, ["t"])
+  assert.throws(() => restoreTask(d, "t", 3000), /no longer/)
+  deleteTask(d, "t", "2026-03-01", 3000)
+  assert.throws(() => restoreTask(d, "t", 603001), /no longer/)
+})
+test("Top 3 enforces its limit and ignores moved or skipped selections", () => {
+  const d = store()
+  for (const id of ["b", "c", "d"]) d.tasks.push({ ...structuredClone(d.tasks[0]), id })
+  materialize(d, "2026-03-01")
+  for (const id of ["t", "b", "c"]) setFocus(d, "2026-03-01", `${id}:2026-03-01`, true)
+  assert.throws(() => setFocus(d, "2026-03-01", "d:2026-03-01", true), /three priorities/)
+  d.occurrences["b:2026-03-01"].status = "skipped"
+  setFocus(d, "2026-03-01", "d:2026-03-01", true)
+  assert.equal(d.focus!["2026-03-01"].length, 3)
+  assert.throws(() => setFocus(d, "2026-03-02", "d:2026-03-01", true), /today/)
 })
 test("all recurrence modes, pause and inclusive boundaries", () => {
   assert.equal(scheduled(spec, "2026-02-28"), false)

@@ -8,6 +8,11 @@ import {
   deleteTask,
   categories,
   changeCategory,
+  initializeOrganization,
+  restoreTask,
+  setFocus,
+  moveTask,
+  taskKindOf,
   localDate,
   materialize,
   newDailyStore,
@@ -47,6 +52,8 @@ export function dailyTransaction<T>(
     daily.categories = [...new Set([...categories, ...daily.tasks.map((task) => task.category), ...Object.values(daily.occurrences).map((row) => row.task.category)])]
     }
     const today = localDate(now, daily.settings.timeZone)
+    initializeOrganization(daily)
+    daily.deletedTasks = (daily.deletedTasks ?? []).filter((entry) => entry.expiresAt > now.getTime())
     materialize(daily, today)
     return fn(daily, today)
   })
@@ -56,7 +63,10 @@ export function dailyView(daily: DailyStore, today: string) {
     today,
     settings: daily.settings,
     tasks: daily.tasks,
-    categories: daily.categories ?? [...categories],
+    categories: [...new Set(Object.values(daily.categoryGroups ?? { routines: [...categories] }).flat())],
+    categoryGroups: daily.categoryGroups!,
+    focus: (daily.focus?.[today] ?? []).filter((id) => daily.occurrences[id]?.date === today && daily.occurrences[id]?.status !== "skipped"),
+    deletedTasks: (daily.deletedTasks ?? []).filter((entry) => entry.expiresAt > Date.now()).map((entry) => ({ id: entry.task.id, title: entry.task.title, expiresAt: entry.expiresAt })),
     taskOrder: daily.taskOrder ?? daily.tasks.map((task) => task.id),
     resources: daily.resources ?? [],
     occurrences: Object.values(daily.occurrences),
@@ -84,14 +94,21 @@ export function mutateDaily(
   today: string,
   body: Record<string, unknown>,
 ) {
-  if (body.action === "category") {
+  if (body.action === "restore-task") {
+    restoreTask(daily, String(body.id))
+    materialize(daily, today)
+  } else if (body.action === "focus") {
+    if (typeof body.selected !== "boolean") throw new Error("Invalid selection.")
+    setFocus(daily, today, String(body.id), body.selected)
+  } else if (body.action === "category") {
     changeCategory(daily, body)
   } else if (body.action === "delete-task") {
     if (typeof body.id !== "string") throw new Error("Task not found.")
     deleteTask(daily, body.id, today)
   } else if (body.action === "task") {
     const spec = validateTask(body.task)
-    const allowedCategories: readonly string[] = daily.categories ?? categories
+    initializeOrganization(daily)
+    const allowedCategories = daily.categoryGroups![taskKindOf(spec)]
     if (!allowedCategories.includes(spec.category)) throw new Error("Choose an existing category.")
     if (spec.courseId && !courses.some((c) => c.id === spec.courseId))
       throw new Error("Unknown course.")
@@ -140,15 +157,7 @@ export function mutateDaily(
     }
     materialize(daily, today)
   } else if (body.action === "reorder") {
-    const id = typeof body.id === "string" ? body.id : ""
-    const targetId = typeof body.targetId === "string" ? body.targetId : ""
-    const order = daily.taskOrder ?? daily.tasks.map((task) => task.id)
-    const index = order.indexOf(id)
-    const target = order.indexOf(targetId)
-    if (!id || !targetId || id === targetId || index < 0 || target < 0) return
-    order.splice(index, 1)
-    order.splice(order.indexOf(targetId), 0, id)
-    daily.taskOrder = order
+    moveTask(daily, today, body)
   } else if (body.action === "resource") {
     if (body.method === "delete") {
       daily.resources = (daily.resources ?? []).filter((resource) => resource.id !== body.id)
