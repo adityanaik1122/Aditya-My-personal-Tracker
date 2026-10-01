@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { Plus, CalendarDays, Pause, Play, ArrowRight } from "lucide-react"
+import { Plus, CalendarDays, Pause, Play, ArrowRight, GripVertical } from "lucide-react"
 import {
   summary,
   type Task,
@@ -60,6 +60,7 @@ export default function DailyClient({
   const [date, setDate] = useState(initial.today)
   const [editor, setEditor] = useState<TaskSpec | Task | null>(null)
   const [taskKind, setTaskKind] = useState<"routines" | "once">("routines")
+  const [draggedTask, setDraggedTask] = useState<string | null>(null)
   const saving = useRef(false)
   const revision = useRef(0)
   const currentToday = useRef(initial.today)
@@ -133,9 +134,15 @@ export default function DailyClient({
       setBusy(false)
     }
   }
-  const rows = data.occurrences.filter((r) => r.date === date)
+  const taskOrder = data.taskOrder ?? data.tasks.map((task) => task.id)
+  const rows = data.occurrences
+    .filter((r) => r.date === date)
+    .sort((a, b) => taskOrder.indexOf(a.taskId) - taskOrder.indexOf(b.taskId))
   const stats = summary(rows)
   const locked = busy || offline
+  const orderedTasks = [...data.tasks].sort((a, b) => {
+    return taskOrder.indexOf(a.id) - taskOrder.indexOf(b.id)
+  })
   const titles: Record<string, [string, string]> = {
     today: [
       "A little progress, every day.",
@@ -359,13 +366,29 @@ export default function DailyClient({
             schedules; completed, skipped, and moved occurrences keep their
             history.
           </div>
-          {!data.tasks.some(t => (t.recurrence === "once") === (taskKind === "once")) && <Empty title={taskKind === "once" ? "No one-off tasks yet" : "No routines yet"} text={taskKind === "once" ? "Use Add task for something you only need to do once." : "Use Add routine for an activity that repeats."} />}
-          {data.tasks.filter(t => (t.recurrence === "once") === (taskKind === "once")).map((task) => (
+          {!orderedTasks.some(t => (t.recurrence === "once") === (taskKind === "once")) && <Empty title={taskKind === "once" ? "No one-off tasks yet" : "No routines yet"} text={taskKind === "once" ? "Use Add task for something you only need to do once." : "Use Add routine for an activity that repeats."} />}
+          {orderedTasks.filter(t => (t.recurrence === "once") === (taskKind === "once")).map((task) => {
+            return (
             <article
               key={task.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5"
+              draggable={!locked}
+              onDragStart={() => setDraggedTask(task.id)}
+              onDragEnd={() => setDraggedTask(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={async (event) => {
+                event.preventDefault()
+                if (draggedTask && draggedTask !== task.id) {
+                  await save({ action: "reorder", id: draggedTask, targetId: task.id })
+                }
+                setDraggedTask(null)
+              }}
+              className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5 transition ${draggedTask === task.id ? "opacity-40" : ""}`}
             >
-              <div className="min-w-0">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-1 cursor-grab text-zinc-300 active:cursor-grabbing" title="Drag to reorder" aria-label="Drag to reorder">
+                  <GripVertical size={19} />
+                </span>
+                <div>
                 <p className="text-xs text-zinc-500">
                   {task.category} · {scheduleLabel(task)} · {task.minutes} min
                 </p>
@@ -377,8 +400,9 @@ export default function DailyClient({
                   })() : task.paused ? "Paused" : "Scheduled"}
                   {task.endDate ? ` · Ends ${task.endDate}` : ""}
                 </p>
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   className={button}
                   disabled={locked}
@@ -403,7 +427,8 @@ export default function DailyClient({
                 </button>
               </div>
             </article>
-          ))}
+            )
+          })}
         </div>
       )}
       {view === "study" && (

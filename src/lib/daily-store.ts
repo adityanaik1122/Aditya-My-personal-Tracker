@@ -22,6 +22,7 @@ export function dailyTransaction<T>(
   return updateStore((store) => {
     store.daily ??= newDailyStore(now)
     const daily = store.daily
+    daily.taskOrder ??= daily.tasks.map((task) => task.id)
     const today = localDate(now, daily.settings.timeZone)
     materialize(daily, today)
     return fn(daily, today)
@@ -32,6 +33,7 @@ export function dailyView(daily: DailyStore, today: string) {
     today,
     settings: daily.settings,
     tasks: daily.tasks,
+    taskOrder: daily.taskOrder ?? daily.tasks.map((task) => task.id),
     occurrences: Object.values(daily.occurrences),
     coursePlans: daily.coursePlans,
     push: {
@@ -105,6 +107,17 @@ export function mutateDaily(
       })
     }
     materialize(daily, today)
+  } else if (body.action === "reorder") {
+    const id = typeof body.id === "string" ? body.id : ""
+    const targetId = typeof body.targetId === "string" ? body.targetId : ""
+    const order = daily.taskOrder ?? daily.tasks.map((task) => task.id)
+    const index = order.indexOf(id)
+    const target = order.indexOf(targetId)
+    if (!id || !targetId || id === targetId || index < 0 || target < 0)
+      throw new Error("Task cannot be moved there.")
+    order.splice(index, 1)
+    order.splice(order.indexOf(targetId), 0, id)
+    daily.taskOrder = order
   } else if (body.action === "occurrence") {
     if (!Object.hasOwn(daily.occurrences, String(body.id)))
       throw new Error("Occurrence not found.")
