@@ -300,8 +300,16 @@ export default function DailyClient({
               </p>
             </div>
           </section>
-          {date === data.today && <TopThree data={data} save={save} busy={locked} />}
-          {(["routines", "once"] as const).map((kind) => {
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Task type">
+            {(["routines", "once"] as const).map(kind => (
+              <button key={kind} type="button" aria-pressed={taskKind === kind} className={taskKind === kind ? primary : button} onClick={() => setTaskKind(kind)}>
+                {kind === "routines" ? "Routines" : "One-off tasks"}
+                <span className="ml-2">{rows.filter(r => (r.task.recurrence === "once") === (kind === "once")).length}</span>
+              </button>
+            ))}
+          </div>
+          {date === data.today && <TopThree data={data} save={save} busy={locked} kind={taskKind} />}
+          {[taskKind].map((kind) => {
             const group = rows.filter((r) => (r.task.recurrence === "once") === (kind === "once"))
             const groupStats = summary(group)
             const isRoutine = kind === "routines"
