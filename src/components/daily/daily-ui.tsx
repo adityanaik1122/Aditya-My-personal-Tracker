@@ -30,7 +30,7 @@ export function Label({
 export const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 export function scheduleLabel(task: TaskSpec) {
   return task.recurrence === "once"
-    ? `Once · ${task.startDate}`
+    ? "One-off · Anytime"
     : task.recurrence === "weekdays"
       ? task.weekdays.map((d) => days[d]).join(", ")
       : task.recurrence === "weekly"

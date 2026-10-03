@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Plus, CalendarDays, Pause, Play, ArrowRight, GripVertical } from "lucide-react"
 import {
   summary,
+  visibleOn,
   type Task,
   type TaskSpec,
 } from "@/lib/daily-model"
@@ -141,7 +142,7 @@ export default function DailyClient({
   }
   const taskOrder = data.taskOrder ?? data.tasks.map((task) => task.id)
   const rows = data.occurrences
-    .filter((r) => r.date === date)
+    .filter((r) => visibleOn(r, date, data.today))
     .sort((a, b) => taskOrder.indexOf(a.taskId) - taskOrder.indexOf(b.taskId))
   const stats = summary(rows)
   const locked = busy || offline
@@ -318,14 +319,14 @@ export default function DailyClient({
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 id={`${kind}-heading`} className="text-lg font-semibold">{isRoutine ? "Daily routines" : "One-off tasks"}</h2>
-                    <p className="mt-1 text-sm text-zinc-500">{isRoutine ? "Repeating activities scheduled for this date. They return on their next scheduled day." : "Do these once. Completed tasks stay done."}</p>
+                    <p className="mt-1 text-sm text-zinc-500">{isRoutine ? "Repeating activities scheduled for this date. They return on their next scheduled day." : "No dates or deadlines. Keep these here until you complete them."}</p>
                     <p className="mt-2 text-sm font-medium text-emerald-800">{groupStats.completed} of {groupStats.total} completed</p>
                   </div>
                   <button className={button} disabled={locked} onClick={() => setEditor({ ...blank(data.today), category: data.categoryGroups[kind][0], recurrence: isRoutine ? "daily" : "once" })}>
                     <Plus size={16} />{isRoutine ? "Add routine" : "Add task"}
                   </button>
                 </div>
-                {group.length === 0 && <p className="rounded-2xl border border-dashed p-6 text-sm text-zinc-500">{isRoutine ? "No routines scheduled for this date." : "No one-off tasks scheduled for this date."}</p>}
+                {group.length === 0 && <p className="rounded-2xl border border-dashed p-6 text-sm text-zinc-500">{isRoutine ? "No routines scheduled for this date." : "No unfinished one-off tasks."}</p>}
                 <div className="space-y-6">
                   {data.categoryGroups[kind].map((category) => {
                     const categoryRows = group.filter((row) => row.task.category === category)
@@ -339,14 +340,14 @@ export default function DailyClient({
             )
           })}
           {data.occurrences.some(
-            (r) => r.scheduledDate === date && r.date !== date,
+            (r) => r.task.recurrence !== "once" && r.scheduledDate === date && r.date !== date,
           ) && (
             <section className="rounded-xl border border-dashed p-5">
               <h2 className="text-sm font-semibold">
                 Rescheduled from this date
               </h2>
               {data.occurrences
-                .filter((r) => r.scheduledDate === date && r.date !== date)
+                .filter((r) => r.task.recurrence !== "once" && r.scheduledDate === date && r.date !== date)
                 .map((r) => (
                   <p key={r.id} className="mt-2 text-sm text-zinc-500">
                     {r.task.title} <ArrowRight className="inline" size={13} />{" "}
@@ -421,9 +422,9 @@ export default function DailyClient({
                 <p className="mt-2 text-xs text-zinc-500">
                   {task.recurrence === "once" ? (() => {
                     const occurrence = data.occurrences.find(r => r.taskId === task.id)
-                    return occurrence?.status === "completed" ? "Completed" : occurrence?.status === "skipped" ? "Skipped" : task.paused ? "Paused" : `Scheduled for ${occurrence?.date || task.startDate}`
+                    return occurrence?.status === "completed" ? "Completed" : occurrence?.status === "skipped" ? "Skipped" : task.paused ? "Paused" : "Anytime · No due date"
                   })() : task.paused ? "Paused" : "Scheduled"}
-                  {task.endDate ? ` · Ends ${task.endDate}` : ""}
+                  {task.recurrence !== "once" && task.endDate ? ` · Ends ${task.endDate}` : ""}
                 </p>
                 </div>
               </div>

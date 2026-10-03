@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { addDays, summary, consistency } from "@/lib/daily-model"
+import { addDays, summary, consistency, visibleOn } from "@/lib/daily-model"
 import type { DailyView } from "@/lib/daily-store"
 import type { Catalog } from "./daily-ui"
 import ProgressRing from "./progress-ring"
@@ -10,9 +10,9 @@ export default function Insights({
   data: DailyView
   catalog: Catalog
 }) {
-  const rows = data.occurrences.filter((r) => r.date <= data.today)
+  const rows = data.occurrences.filter((r) => r.date <= data.today && (r.task.recurrence !== "once" || r.status !== "pending"))
   const categories = data.categories
-  const todayRows = rows.filter((r) => r.date === data.today)
+  const todayRows = data.occurrences.filter((r) => visibleOn(r, data.today, data.today))
   const routineRows = todayRows.filter((r) => r.task.recurrence !== "once")
   const oneOffRows = todayRows.filter((r) => r.task.recurrence === "once")
   const todaySummary = summary(todayRows)

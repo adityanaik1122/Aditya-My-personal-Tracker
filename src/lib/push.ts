@@ -2,7 +2,7 @@ import "server-only"
 import webpush from "web-push"
 import { createHash } from "node:crypto"
 import { dailyTransaction } from "./daily-store"
-import { claimReminder, type Subscription } from "./daily-model"
+import { claimReminder, visibleOn, type Subscription } from "./daily-model"
 
 export function pushConfigured() {
   return Boolean(
@@ -70,7 +70,7 @@ export async function morningJob(now = new Date()) {
   const claims = await dailyTransaction((daily, today) => {
     daily.schedulerLastSeen = now.toISOString()
     const count = Object.values(daily.occurrences).filter(
-      (r) => r.date === today && r.status === "pending",
+      (r) => visibleOn(r, today, today) && r.status === "pending",
     ).length
     return daily.subscriptions.flatMap((sub) => {
       const id = createHash("sha256").update(sub.endpoint).digest("hex")

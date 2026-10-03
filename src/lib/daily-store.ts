@@ -4,6 +4,7 @@ import { courses } from "@/data/courses"
 import { updateStore } from "./store"
 import {
   addDays,
+  visibleOn,
   changeOccurrence,
   deleteTask,
   categories,
@@ -65,7 +66,7 @@ export function dailyView(daily: DailyStore, today: string) {
     tasks: daily.tasks,
     categories: [...new Set(Object.values(daily.categoryGroups ?? { routines: [...categories] }).flat())],
     categoryGroups: daily.categoryGroups!,
-    focus: (daily.focus?.[today] ?? []).filter((id) => daily.occurrences[id]?.date === today && daily.occurrences[id]?.status !== "skipped"),
+    focus: (daily.focus?.[today] ?? []).filter((id) => daily.occurrences[id] && visibleOn(daily.occurrences[id], today, today) && daily.occurrences[id]?.status !== "skipped"),
     deletedTasks: (daily.deletedTasks ?? []).filter((entry) => entry.expiresAt > Date.now()).map((entry) => ({ id: entry.task.id, title: entry.task.title, expiresAt: entry.expiresAt })),
     taskOrder: daily.taskOrder ?? daily.tasks.map((task) => task.id),
     resources: daily.resources ?? [],
@@ -132,7 +133,7 @@ export function mutateDaily(
       Object.assign(existing, spec)
       const row = daily.occurrences[`${existing.id}:${today}`]
       // Only untouched occurrences can change with a schedule edit. Actions are permanent history.
-      if (row && !row.history.length && row.date === today) {
+      if (row && row.task.recurrence !== "once" && !row.history.length && row.date === today) {
         if (!scheduled(spec, today)) delete daily.occurrences[row.id]
         else
           row.task = {
@@ -146,8 +147,6 @@ export function mutateDaily(
           }
       }
     } else {
-      if (spec.recurrence === "once" && spec.startDate < today)
-        throw new Error("New one-off tasks must be scheduled today or later.")
       daily.tasks.push({
         ...spec,
         id: randomUUID(),
@@ -183,8 +182,9 @@ export function mutateDaily(
         body.to > addDays(today, 366))
     )
       throw new Error("Reschedule from today up to one year ahead.")
-    if (body.status === "completed" && row.date > today)
+    if (body.status === "completed" && row.task.recurrence !== "once" && row.date > today)
       throw new Error("Future tasks cannot be completed early.")
+    row.timeZone = daily.settings.timeZone
     changeOccurrence(
       row,
       String(body.status),

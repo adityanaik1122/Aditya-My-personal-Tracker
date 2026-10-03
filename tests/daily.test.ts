@@ -21,6 +21,7 @@ import {
   scheduled,
   summary,
   validateTask,
+  visibleOn,
   type TaskSpec,
 } from "../src/lib/daily-model"
 import { updateStore, readStore } from "../src/lib/file-store"
@@ -51,6 +52,48 @@ function store() {
   ]
   return d
 }
+
+test("one-off tasks remain available across days without new occurrences", () => {
+  const d = store()
+  Object.assign(d.tasks[0], { recurrence: "once", startDate: "2027-01-01", endDate: "2027-01-02" })
+  materialize(d, "2026-03-01")
+  materialize(d, "2026-03-10")
+  const rows = Object.values(d.occurrences)
+  assert.equal(rows.length, 1)
+  assert.equal(visibleOn(rows[0], "2026-03-10", "2026-03-10"), true)
+  setFocus(d, "2026-03-10", rows[0].id, true)
+  changeOccurrence(rows[0], "completed", new Date("2026-03-10T12:00:00Z"))
+  assert.equal(rows[0].date, "2026-03-10")
+  materialize(d, "2026-03-11")
+  assert.equal(Object.values(d.occurrences).length, 1)
+  assert.equal(visibleOn(rows[0], "2026-03-11", "2026-03-11"), false)
+  changeOccurrence(rows[0], "pending", new Date("2026-03-11T12:00:00Z"))
+  assert.equal(visibleOn(rows[0], "2026-03-11", "2026-03-11"), true)
+  assert.throws(() => changeOccurrence(rows[0], "reschedule", new Date(), "2026-03-12"), /anytime/)
+})
+
+test("legacy one-off tasks recover with original IDs; pause, delete and undo work", () => {
+  const d = store()
+  Object.assign(d.tasks[0], { recurrence: "once" })
+  materialize(d, "2026-03-01")
+  const row = Object.values(d.occurrences)[0]
+  row.history.push({ at: "2026-03-01T12:00:00Z", action: "reschedule", to: "2026-03-02" })
+  row.date = "2026-03-02"
+  const original = row.id
+  materialize(d, "2026-03-10")
+  assert.equal(Object.values(d.occurrences)[0].id, original)
+  assert.equal(row.history.length, 1)
+  assert.equal(visibleOn(row, "2026-03-10", "2026-03-10"), true)
+  d.tasks[0].paused = true
+  materialize(d, "2026-03-10")
+  assert.equal(visibleOn(row, "2026-03-10", "2026-03-10"), false)
+  d.tasks[0].paused = false
+  materialize(d, "2026-03-10")
+  deleteTask(d, "t", "2026-03-10", 1000)
+  assert.equal(Object.values(d.occurrences).length, 0)
+  restoreTask(d, "t", 2000)
+  assert.equal(d.occurrences[original].history.length, 1)
+})
 test("deleting a routine removes pending work but preserves history", () => {
   const d = store()
   d.taskOrder = ["t"]

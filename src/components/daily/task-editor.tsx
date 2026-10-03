@@ -169,8 +169,8 @@ export default function TaskEditor({
             </div>
           </fieldset>
         )}
-        <Label
-          name={task.recurrence === "once" ? "Scheduled date" : "Start date"}
+        {task.recurrence !== "once" && <><Label
+          name="Start date"
         >
           <input
             type="date"
@@ -189,6 +189,8 @@ export default function TaskEditor({
             onChange={(e) => set("endDate", e.target.value)}
           />
         </Label>
+        </>}
+        {task.recurrence === "once" && <p className="sm:col-span-2 text-sm text-zinc-500">No due date. This task stays available until you complete it.</p>}
         <Label name="Active course (optional)">
           <select
             className={field}

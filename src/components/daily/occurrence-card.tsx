@@ -76,12 +76,12 @@ export default function OccurrenceCard({
               className={row.status === "completed" ? "text-emerald-800" : ""}
             >
               {row.status === "pending"
-                ? "Scheduled"
+                ? row.task.recurrence === "once" ? "Anytime" : "Scheduled"
                 : row.status === "skipped"
                   ? "Intentionally skipped"
                   : "Completed"}
             </span>
-            {row.scheduledDate !== row.date && (
+            {row.task.recurrence !== "once" && row.scheduledDate !== row.date && (
               <span>Moved from {row.scheduledDate}</span>
             )}
           </div>
@@ -129,7 +129,7 @@ export default function OccurrenceCard({
             {row.status === "skipped" ? "Undo skip" : "Skip this occurrence"}
           </button>
         )}
-        {row.status === "pending" && (
+        {row.status === "pending" && row.task.recurrence !== "once" && (
           <button
             className="min-h-11 px-3 text-xs text-zinc-500 hover:underline"
             disabled={busy}

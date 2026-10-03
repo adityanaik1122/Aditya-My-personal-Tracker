@@ -99,7 +99,7 @@ export function initializeOrganization(store: DailyStore) {
 export function deleteTask(store: DailyStore, id: string, today: string, now = Date.now()) {
   if (!store.tasks.some((task) => task.id === id)) throw new Error("Task not found.")
   initializeOrganization(store)
-  const removed = Object.values(store.occurrences).filter((row) => row.taskId === id && row.date >= today && row.status === "pending")
+  const removed = Object.values(store.occurrences).filter((row) => row.taskId === id && (row.date >= today || row.task.recurrence === "once") && row.status === "pending")
   store.deletedTasks = [...(store.deletedTasks ?? []).filter((entry) => entry.expiresAt > now), {
     task: structuredClone(store.tasks.find((task) => task.id === id)!),
     occurrences: structuredClone(removed), position: store.taskOrder!.indexOf(id), expiresAt: now + 10 * 60 * 1000,
@@ -108,7 +108,7 @@ export function deleteTask(store: DailyStore, id: string, today: string, now = D
   store.taskOrder = store.taskOrder?.filter((taskId) => taskId !== id)
   for (const [key, row] of Object.entries(store.occurrences)) {
     // Retain past records and completed/skipped history for accurate insights.
-    if (row.taskId === id && row.date >= today && row.status === "pending") {
+    if (row.taskId === id && (row.date >= today || row.task.recurrence === "once") && row.status === "pending") {
       delete store.occurrences[key]
     }
   }
@@ -125,8 +125,8 @@ export function restoreTask(store: DailyStore, id: string, now = Date.now()) {
 }
 export function setFocus(store: DailyStore, today: string, id: string, selected: boolean) {
   const row = store.occurrences[id]
-  if (!row || row.date !== today || row.status === "skipped") throw new Error("Choose a task scheduled for today.")
-  const ids = (store.focus?.[today] ?? []).filter((key) => store.occurrences[key]?.date === today && store.occurrences[key]?.status !== "skipped")
+  if (!row || !visibleOn(row, today, today) || row.status === "skipped") throw new Error("Choose a task scheduled for today.")
+  const ids = (store.focus?.[today] ?? []).filter((key) => store.occurrences[key] && visibleOn(store.occurrences[key], today, today) && store.occurrences[key]?.status !== "skipped")
   const next = ids.filter((key) => key !== id)
   if (selected) next.push(id)
   if (next.length > 3) throw new Error("Choose up to three priorities for today.")
@@ -147,7 +147,7 @@ export function moveTask(store: DailyStore, today: string, body: Record<string, 
   task.category = category
   const spec = validateTask(task)
   task.versions = [...task.versions.filter((version) => version.from < today), { from: today, spec }]
-  for (const row of Object.values(store.occurrences)) if (row.taskId === task.id && row.date >= today && row.status === "pending") row.task.category = category
+  for (const row of Object.values(store.occurrences)) if (row.taskId === task.id && (row.date >= today || row.task.recurrence === "once") && row.status === "pending") row.task.category = category
   const order = store.taskOrder!.filter((id) => id !== task.id)
   const index = target ? order.indexOf(target.id) + (body.placement === "after" ? 1 : 0) : order.length
   order.splice(index, 0, task.id)
@@ -229,12 +229,25 @@ export function specOn(task: Task, date: string): TaskSpec | undefined {
   return task.versions.filter((v) => v.from <= date).at(-1)?.spec
 }
 export function materialize(store: DailyStore, today: string) {
+  // One-off work has one persistent record, independent of calendar scheduling.
+  // Reuse legacy IDs/history so previously dated tasks are recovered, not copied.
+  for (const task of store.tasks.filter((t) => t.recurrence === "once")) {
+    const existing = Object.values(store.occurrences).filter((r) => r.taskId === task.id && r.task.recurrence === "once")
+    if (!existing.length && !task.paused) {
+      const legacyId = `${task.id}:${task.createdDate}`
+      const id = store.occurrences[legacyId] ? `${task.id}:once` : legacyId
+      store.occurrences[id] ??= { id, taskId: task.id, scheduledDate: task.createdDate, date: task.createdDate,
+        timeZone: store.settings.timeZone, task: validateTask(task), status: "pending", history: [] }
+    }
+    for (const row of existing) if (row.status === "pending") row.task = validateTask(task)
+  }
   // Calendar arithmetic is UTC date-only; local midnight is never advanced by 24h.
   // Existing keys survive retries and time-zone changes, preserving recorded history.
   let from = store.through ? addDays(store.through, 1) : today
   if (from > today) from = today
   for (let date = from; date <= today; date = addDays(date, 1)) {
     for (const task of store.tasks) {
+      if (task.recurrence === "once") continue
       const spec = specOn(task, date)
       if (!spec || date < task.createdDate || !scheduled(spec, date)) continue
       const id = `${task.id}:${date}`
@@ -257,6 +270,11 @@ export function materialize(store: DailyStore, today: string) {
     }
   }
   if (today > store.through) store.through = today
+}
+export function visibleOn(row: Occurrence, date: string, today: string) {
+  if (row.task.recurrence !== "once") return row.date === date
+  if (row.status === "pending") return date === today && !row.task.paused
+  return row.date === date
 }
 export function summary(rows: Occurrence[]) {
   const completed = rows.filter((r) => r.status === "completed").length
@@ -289,6 +307,7 @@ export function changeOccurrence(
   to?: string,
 ) {
   if (action === "reschedule") {
+    if (row.task.recurrence === "once") throw new Error("One-off tasks are available anytime and do not need rescheduling.")
     if (!to || !validDate(to)) throw new Error("Choose a valid new date.")
     if (row.status !== "pending")
       throw new Error("Undo completion or skip before rescheduling.")
@@ -299,6 +318,7 @@ export function changeOccurrence(
     if (!["pending", "completed", "skipped"].includes(action))
       throw new Error("Invalid occurrence action.")
     if (row.status === action) return
+    if (row.task.recurrence === "once" && action !== "pending") row.date = localDate(now, row.timeZone)
     row.status = action as Occurrence["status"]
     row.history.push({ at: now.toISOString(), action })
   }
