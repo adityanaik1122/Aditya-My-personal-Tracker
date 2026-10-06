@@ -3,7 +3,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Clock3 } from "lucide-react"
 import { addDays, type Occurrence } from "@/lib/daily-model"
-import { Label, field, button, primary, type Save } from "./daily-ui"
+import { Badge, Label, cadenceOf, field, button, primary, type Save } from "./daily-ui"
 export default function OccurrenceCard({
   row,
   today,
@@ -20,9 +20,11 @@ export default function OccurrenceCard({
   const [target, setTarget] = useState(addDays(today, 1))
   const url =
     row.task.url || (row.task.courseId ? `/courses/${row.task.courseId}` : "")
+  const cadence = cadenceOf(row.task)
+  const oneOff = row.task.recurrence === "once"
   return (
     <article
-      className={`rounded-2xl border bg-white p-4 sm:p-5 ${row.status === "completed" ? "border-emerald-200 bg-emerald-50/30!" : "border-zinc-200/80"}`}
+      className={`rounded-2xl border bg-white p-4 sm:p-5 ${row.status === "completed" ? "border-emerald-200 bg-emerald-50/30!" : oneOff ? "border-l-4 border-l-amber-300 border-zinc-200/80" : "border-l-4 border-l-sky-300 border-zinc-200/80"}`}
     >
       <div className="flex items-start gap-3 sm:gap-4">
         <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center">
@@ -53,12 +55,21 @@ export default function OccurrenceCard({
             >
               {row.task.title}
             </h3>
+            <Badge tone={cadence.kindTone}>{cadence.kind}</Badge>
+            <Badge tone={cadence.tone} title={cadence.note || undefined}>
+              {cadence.label}
+            </Badge>
             {row.task.priority === "high" && (
               <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-800">
                 Priority
               </span>
             )}
           </div>
+          {cadence.perWeek === 1 && (
+            <p className="mt-2 inline-flex rounded-lg bg-violet-50 px-2 py-1 text-xs font-medium text-violet-900 ring-1 ring-violet-200">
+              {cadence.note}
+            </p>
+          )}
           {row.task.notes && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-500">
               {row.task.notes}

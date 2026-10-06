@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { addDays, summary, consistency, visibleOn } from "@/lib/daily-model"
 import type { DailyView } from "@/lib/daily-store"
-import type { Catalog } from "./daily-ui"
+import { Badge, cadenceOf, type Catalog } from "./daily-ui"
 import ProgressRing from "./progress-ring"
 export default function Insights({
   data,
@@ -69,12 +69,16 @@ export default function Insights({
         </div>
         <div className="mt-6 grid gap-6 sm:grid-cols-3">
           <ProgressRing value={todaySummary.rate} label="All tasks" detail={`${todaySummary.completed}/${todaySummary.total} completed`} />
-          <ProgressRing value={routineSummary.rate} label="Daily routines" detail={`${routineSummary.completed}/${routineSummary.total} completed`} tone="sky" />
+          <ProgressRing value={routineSummary.rate} label="Routines due today" detail={routineSummary.total ? `${routineSummary.completed}/${routineSummary.total} completed` : "No routine is due today"} tone="sky" />
           <ProgressRing value={oneOffSummary.rate} label="One-off tasks" detail={oneOffSummary.total ? `${oneOffSummary.completed}/${oneOffSummary.total} completed` : "Nothing due today"} tone="amber" />
         </div>
       </section>
       <section className="rounded-2xl border bg-white p-5 sm:p-7">
         <h2 className="font-semibold">The last two weeks</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Routines count on the days they were due; one-off tasks only on the
+          day you finished them.
+        </p>
         <div className="mt-6 flex h-36 items-end gap-1.5 sm:gap-3">
           {recent.map((date) => {
             const s = summary(rows.filter((r) => r.date === date))
@@ -253,22 +257,78 @@ export default function Insights({
           </div>
         </div>
       </section>
-      <section className="rounded-2xl border bg-white p-5">
-        <h2 className="mb-4 font-semibold">Consistency, on your schedule</h2>
+      <section className="rounded-2xl border-l-4 border-l-sky-300 border bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-semibold">Routines · consistency on your schedule</h2>
+          <p className="text-xs text-zinc-500">
+            Each routine is counted only on the days it is actually due
+          </p>
+        </div>
+        {!data.tasks.some((t) => t.recurrence !== "once") && (
+          <p className="mt-4 text-sm text-zinc-500">No routines yet.</p>
+        )}
         {data.tasks
           .filter((t) => t.recurrence !== "once")
           .map((t) => {
             const own = rows.filter((r) => r.taskId === t.id)
             const s = summary(own)
+            const month = summary(
+              own.filter((r) => r.date >= addDays(data.today, -29)),
+            )
+            const cadence = cadenceOf(t)
+            return (
+              <div key={t.id} className="mt-4 border-t pt-4 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{t.title}</span>
+                  <Badge tone={cadence.tone} title={cadence.note || undefined}>
+                    {cadence.label}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-zinc-500">
+                  {s.completed}/{s.total} completed all time · due{" "}
+                  {month.total} {month.total === 1 ? "day" : "days"} in the last
+                  30 · {consistency(own, data.today)} scheduled occurrences in a
+                  row
+                </p>
+                {cadence.perWeek > 0 && cadence.perWeek < 7 && (
+                  <p className="mt-2 inline-flex rounded-lg bg-violet-50 px-2 py-1 text-xs font-medium text-violet-900 ring-1 ring-violet-200">
+                    {cadence.note}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+      </section>
+      <section className="rounded-2xl border-l-4 border-l-amber-300 border bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-semibold">One-off tasks</h2>
+          <p className="text-xs text-zinc-500">
+            Counted once, on the day you finish them — never day after day
+          </p>
+        </div>
+        {!data.tasks.some((t) => t.recurrence === "once") && (
+          <p className="mt-4 text-sm text-zinc-500">No one-off tasks yet.</p>
+        )}
+        {data.tasks
+          .filter((t) => t.recurrence === "once")
+          .map((t) => {
+            const own = data.occurrences.filter((r) => r.taskId === t.id)
+            const done = own.find((r) => r.status !== "pending")
             return (
               <div
                 key={t.id}
-                className="flex flex-wrap justify-between gap-2 border-t py-4 text-sm"
+                className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-4 text-sm"
               >
-                <span>{t.title}</span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{t.title}</span>
+                  <Badge tone="amber">Do once</Badge>
+                </span>
                 <span className="text-zinc-500">
-                  {s.completed}/{s.total} completed ·{" "}
-                  {consistency(own, data.today)} scheduled occurrences in a row
+                  {done
+                    ? `${done.status === "completed" ? "Completed" : "Skipped"} on ${done.date}`
+                    : t.paused
+                      ? "Paused"
+                      : "Still open · no due date"}
                 </span>
               </div>
             )
@@ -299,11 +359,14 @@ export default function Insights({
       </section>
       <p className="text-xs leading-6 text-zinc-500">
         Rates = completed ÷ actually scheduled tasks, including intentional
-        skips. Rescheduled tasks count on their destination date. Off-days have
-        no denominator and do not break consistency. A skipped or unfinished
-        past occurrence ends a run; today stays open until the day ends. History
-        begins when you create a routine and is never backfilled before
-        creation.
+        skips. A weekly routine is only ever counted on its one scheduled
+        weekday, and a one-off task only on the day you finish it — neither is
+        added to every day. Rescheduled tasks count on their destination date.
+        Off-days have no denominator and do not break consistency. A skipped or
+        unfinished past occurrence ends a run; today stays open until the day
+        ends. History begins when you create a routine and is never backfilled
+        before creation. If a routine used to repeat daily, those older days
+        stay in its history after you switch it to weekly.
       </p>
     </div>
   )

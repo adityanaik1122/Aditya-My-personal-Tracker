@@ -9,9 +9,10 @@ import {
 } from "@/lib/daily-model"
 import type { DailyView } from "@/lib/daily-store"
 import {
+  Badge,
   button,
+  cadenceOf,
   primary,
-  scheduleLabel,
   type Catalog,
   type Save,
 } from "./daily-ui"
@@ -387,6 +388,7 @@ export default function DailyClient({
               onDrop={async (event) => { event.preventDefault(); if (!locked && draggedTask) await save({ action: "reorder", id: draggedTask, category }); setDraggedTask(null); setDropTarget(null) }}>
             {!categoryTasks.length && <p className="p-3 text-sm text-zinc-500">No tasks yet. Drop a task here or add one in this category.</p>}
             {categoryTasks.map((task) => {
+            const cadence = cadenceOf(task)
             return (
             <article
               key={task.id}
@@ -408,17 +410,24 @@ export default function DailyClient({
                 setDraggedTask(null)
                 setDropTarget(null)
               }}
-              className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 bg-white p-5 transition ${draggedTask === task.id ? "opacity-40" : ""} ${dropTarget?.id === task.id ? dropTarget.placement === "before" ? "border-t-4 border-t-cyan-500" : "border-b-4 border-b-cyan-500" : ""}`}
+              className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-200/80 border-l-4 bg-white p-5 transition ${task.recurrence === "once" ? "border-l-amber-300" : "border-l-sky-300"} ${draggedTask === task.id ? "opacity-40" : ""} ${dropTarget?.id === task.id ? dropTarget.placement === "before" ? "border-t-4 border-t-cyan-500" : "border-b-4 border-b-cyan-500" : ""}`}
             >
               <div className="flex min-w-0 items-start gap-3">
                 <span draggable={!locked} onDragStart={(event) => { setDraggedTask(task.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", task.id) }} onDragEnd={() => { setDraggedTask(null); setDropTarget(null) }} className="mt-1 cursor-grab text-zinc-500 active:cursor-grabbing" title="Drag to reorder or move category" aria-label="Drag to reorder">
                   <GripVertical size={19} />
                 </span>
                 <div>
-                <p className="text-xs text-zinc-500">
-                  {task.category} · {scheduleLabel(task)} · {task.minutes} min
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={cadence.kindTone}>{cadence.kind}</Badge>
+                  <Badge tone={cadence.tone} title={cadence.note || undefined}>{cadence.label}</Badge>
+                  <span className="text-xs text-zinc-500">{task.category} · {task.minutes} min</span>
+                </div>
                 <h2 className="mt-1 font-semibold">{task.title}</h2>
+                {cadence.perWeek === 1 && (
+                  <p className="mt-2 inline-flex rounded-lg bg-violet-50 px-2 py-1 text-xs font-medium text-violet-900 ring-1 ring-violet-200">
+                    {cadence.note}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-zinc-500">
                   {task.recurrence === "once" ? (() => {
                     const occurrence = data.occurrences.find(r => r.taskId === task.id)

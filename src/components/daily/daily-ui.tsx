@@ -28,12 +28,74 @@ export function Label({
   )
 }
 export const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-export function scheduleLabel(task: TaskSpec) {
-  return task.recurrence === "once"
-    ? "One-off · Anytime"
-    : task.recurrence === "weekdays"
-      ? task.weekdays.map((d) => days[d]).join(", ")
-      : task.recurrence === "weekly"
-        ? `Weekly · ${days[new Date(`${task.startDate}T12:00:00Z`).getUTCDay()]}`
-        : "Every day"
+export type Tone = "sky" | "violet" | "amber"
+const tones: Record<Tone, string> = {
+  sky: "bg-sky-50 text-sky-900 ring-sky-200",
+  violet: "bg-violet-50 text-violet-900 ring-violet-200",
+  amber: "bg-amber-50 text-amber-900 ring-amber-200",
+}
+export function Badge({
+  tone,
+  title,
+  children,
+}: {
+  tone: Tone
+  title?: string
+  children: ReactNode
+}) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  )
+}
+const weekdayOf = (date: string) =>
+  days[new Date(`${date}T12:00:00Z`).getUTCDay()] ?? "its start day"
+// One source of truth for how often a task is due, so Today, Routines and
+// Consistency never imply a weekly task is expected every day.
+export function cadenceOf(task: TaskSpec) {
+  const routine = { kind: "Routine", kindTone: "sky" as Tone }
+  if (task.recurrence === "once")
+    return {
+      kind: "One-off",
+      kindTone: "amber" as Tone,
+      label: "Do once",
+      tone: "amber" as Tone,
+      note: "One-off task — do it once, any day. It stays here until you complete it.",
+      perWeek: 0,
+    }
+  if (task.recurrence === "weekly")
+    return {
+      ...routine,
+      label: `Once a week · ${weekdayOf(task.startDate)}`,
+      tone: "violet" as Tone,
+      note: `Only once a week, on ${weekdayOf(task.startDate)}. Other days are not counted against it.`,
+      perWeek: 1,
+    }
+  if (task.recurrence === "weekdays") {
+    const chosen = [...task.weekdays].sort((a, b) => a - b).map((d) => days[d])
+    return {
+      ...routine,
+      label:
+        chosen.length === 1
+          ? `Once a week · ${chosen[0]}`
+          : `${chosen.length}× a week · ${chosen.join(", ")}`,
+      tone: chosen.length <= 2 ? ("violet" as Tone) : ("sky" as Tone),
+      note:
+        chosen.length === 1
+          ? `Only once a week, on ${chosen[0]}. Other days are not counted against it.`
+          : `Only on ${chosen.join(", ")} — ${chosen.length} days a week. Other days are not counted against it.`,
+      perWeek: chosen.length,
+    }
+  }
+  return {
+    ...routine,
+    label: "Every day",
+    tone: "sky" as Tone,
+    note: "",
+    perWeek: 7,
+  }
 }

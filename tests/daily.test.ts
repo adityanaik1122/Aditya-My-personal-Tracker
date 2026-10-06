@@ -25,6 +25,7 @@ import {
   type TaskSpec,
 } from "../src/lib/daily-model"
 import { updateStore, readStore } from "../src/lib/file-store"
+import { cadenceOf } from "../src/components/daily/daily-ui"
 
 const spec: TaskSpec = {
   title: "Practice",
@@ -272,6 +273,46 @@ test("reschedule preserves identity, history and future routine", () => {
     Object.values(d.occurrences).filter((r) => r.date === "2026-03-03").length,
     2,
   )
+})
+test("a weekly routine is materialized once a week, never once a day", () => {
+  const d = store()
+  d.tasks[0].versions[0].spec.recurrence = "weekly"
+  d.tasks[0].recurrence = "weekly"
+  materialize(d, "2026-03-29")
+  const dates = Object.values(d.occurrences)
+    .filter((r) => r.taskId === "t")
+    .map((r) => r.date)
+    .sort()
+  // 2026-03-01 is a Sunday; only Sundays are due.
+  assert.deepEqual(dates, [
+    "2026-03-01",
+    "2026-03-08",
+    "2026-03-15",
+    "2026-03-22",
+    "2026-03-29",
+  ])
+  for (const date of ["2026-03-02", "2026-03-05", "2026-03-28"])
+    assert.equal(
+      summary(Object.values(d.occurrences).filter((r) => r.date === date))
+        .total,
+      0,
+      `${date} must have no denominator for a weekly routine`,
+    )
+})
+test("cadence copy names how often a task is due", () => {
+  assert.equal(cadenceOf({ ...spec, recurrence: "daily" }).perWeek, 7)
+  const weekly = cadenceOf({ ...spec, recurrence: "weekly" })
+  assert.equal(weekly.perWeek, 1)
+  assert.equal(weekly.label, "Once a week · Sun")
+  assert.match(weekly.note, /Only once a week, on Sun/)
+  assert.equal(cadenceOf({ ...spec, recurrence: "weekdays" }).perWeek, 2)
+  assert.equal(
+    cadenceOf({ ...spec, recurrence: "weekdays", weekdays: [4] }).label,
+    "Once a week · Thu",
+  )
+  const once = cadenceOf({ ...spec, recurrence: "once" })
+  assert.equal(once.kind, "One-off")
+  assert.equal(cadenceOf({ ...spec, recurrence: "daily" }).kind, "Routine")
 })
 test("skips stay in denominator; off-days do not break weekly consistency", () => {
   const d = store()
