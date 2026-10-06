@@ -299,6 +299,23 @@ test("a weekly routine is materialized once a week, never once a day", () => {
       `${date} must have no denominator for a weekly routine`,
     )
 })
+  test("weekly pending routines stay visible until completed, then return next week", () => {
+    const d = store()
+    d.tasks[0].recurrence = "weekly"
+    d.tasks[0].versions[0].spec.recurrence = "weekly"
+    materialize(d, "2026-03-01")
+    const first = d.occurrences["t:2026-03-01"]
+
+    assert.equal(visibleOn(first, "2026-03-01", "2026-03-01"), true)
+    assert.equal(visibleOn(first, "2026-03-07", "2026-03-07"), true)
+    assert.equal(visibleOn(first, "2026-03-10", "2026-03-10"), true)
+
+    changeOccurrence(first, "completed", new Date("2026-03-04T12:00:00Z"))
+    assert.equal(visibleOn(first, "2026-03-04", "2026-03-04"), false)
+    materialize(d, "2026-03-08")
+    const nextWeek = d.occurrences["t:2026-03-08"]
+    assert.equal(visibleOn(nextWeek, "2026-03-08", "2026-03-08"), true)
+  })
 test("cadence copy names how often a task is due", () => {
   assert.equal(cadenceOf({ ...spec, recurrence: "daily" }).perWeek, 7)
   const weekly = cadenceOf({ ...spec, recurrence: "weekly" })

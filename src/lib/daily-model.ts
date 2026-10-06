@@ -272,6 +272,8 @@ export function materialize(store: DailyStore, today: string) {
   if (today > store.through) store.through = today
 }
 export function visibleOn(row: Occurrence, date: string, today: string) {
+  if (row.task.recurrence === "weekly" && row.status === "pending")
+    return row.date <= date
   if (row.task.recurrence !== "once") return row.date === date
   if (row.status === "pending") return date === today && !row.task.paused
   return row.date === date
